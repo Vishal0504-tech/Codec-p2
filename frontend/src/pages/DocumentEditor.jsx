@@ -99,7 +99,7 @@ const DocumentEditor = () => {
         awarenessRef.current = awareness;
 
         // 3. ESTABLISH SOCKET.IO CONNECTION WITH AUTH HANDSHAKE
-        const socket = io(import.meta.env.VITE_SOCKET_URL || 'http://localhost:5000', {
+        const socket = io(import.meta.env.VITE_SOCKET_URL || 'https://codec-p2.onrender.com', {
           auth: {
             token: localStorage.getItem('token'), // Pass JWT for connection authentication
           },

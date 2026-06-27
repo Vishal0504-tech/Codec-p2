@@ -6,7 +6,7 @@ import axios from 'axios';
 // Create an instance of Axios with a customized configuration.
 // 'baseURL' sets the default prefix for all API request paths made using this client.
 const api = axios.create({
-  baseURL: import.meta.env.VITE_API_URL || 'http://localhost:5000/api',
+  baseURL: import.meta.env.VITE_API_URL || 'https://codec-p2.onrender.com',
   headers: {
     'Content-Type': 'application/json',
   },
