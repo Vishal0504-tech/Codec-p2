@@ -1,0 +1,72 @@
+# Implementation Plan - Phase 2: User Authentication & Access Control
+
+This plan guides the implementation of user registration, login, JWT authentication middleware, Axios interceptors, Socket.IO authentication handshake, private routing, and the global auth state context.
+
+## Proposed Package Additions (Frontend)
+We will install the following packages in `frontend/`:
+- `axios` (For making promise-based HTTP requests to the backend)
+- `react-router-dom` (For client-side routing and protected routes)
+
+---
+
+## Proposed Changes
+
+### Backend Components
+
+#### [NEW] [User.js](file:///e:/Vishal%20Folder/codec%20intern/Collaborative%20Document%20Editor/backend/models/User.js)
+Define a Mongoose schema for User profiles containing `name`, `email`, `password` (hashed), and `createdAt`.
+
+#### [NEW] [authController.js](file:///e:/Vishal%20Folder/codec%20intern/Collaborative%20Document%20Editor/backend/controllers/authController.js)
+Provide route handlers for registering new accounts (validating inputs, hashing passwords with bcrypt, saving, and issuing a JWT token) and logging in existing users (verifying email, comparing bcrypt hashes, and returning a JWT token).
+
+#### [NEW] [authMiddleware.js](file:///e:/Vishal%20Folder/codec%20intern/Collaborative%20Document%20Editor/backend/middleware/authMiddleware.js)
+An Express middleware that checks the HTTP request's `Authorization: Bearer <token>` header, decodes the token, and attaches the user's ID to `req.user`.
+
+#### [NEW] [authRoutes.js](file:///e:/Vishal%20Folder/codec%20intern/Collaborative%20Document%20Editor/backend/routes/authRoutes.js)
+Exposes endpoint paths `/api/auth/register` and `/api/auth/login` to mapping triggers.
+
+#### [MODIFY] [server.js](file:///e:/Vishal%20Folder/codec%20intern/Collaborative%20Document%20Editor/backend/server.js)
+- Register user authentication HTTP routes.
+- Create custom Socket.IO connection middleware to parse and verify the JWT signature sent during the handshake from the client side, blocking unauthorized WebSockets.
+
+---
+
+### Frontend Components
+
+#### [NEW] [api.js](file:///e:/Vishal%20Folder/codec%20intern/Collaborative%20Document%20Editor/frontend/src/services/api.js)
+Instantiates an Axios client pointing to our backend API. Integrates an interceptor that automatically reads the user token from `localStorage` and appends it to the `Authorization` header on every request.
+
+#### [NEW] [AuthContext.jsx](file:///e:/Vishal%20Folder/codec%20intern/Collaborative%20Document%20Editor/frontend/src/context/AuthContext.jsx)
+Implements a React context wrapper that coordinates global user state, stores login tokens, loads active credentials from local cache, and manages the user login/logout functions.
+
+#### [NEW] [PrivateRoute.jsx](file:///e:/Vishal%20Folder/codec%20intern/Collaborative%20Document%20Editor/frontend/src/components/PrivateRoute.jsx)
+A wrapper component that inspects the current authenticated user state; redirects to `/login` if unauthenticated, otherwise renders the child page views.
+
+#### [NEW] [Navbar.jsx](file:///e:/Vishal%20Folder/codec%20intern/Collaborative%20Document%20Editor/frontend/src/components/Navbar.jsx)
+A navigation header that displays the user's name and email if logged in, plus a logout action button.
+
+#### [NEW] [Register.jsx](file:///e:/Vishal%20Folder/codec%20intern/Collaborative%20Document%20Editor/frontend/src/pages/Register.jsx)
+An interactive signup layout with field validations that submits registration details to the API.
+
+#### [NEW] [Login.jsx](file:///e:/Vishal%20Folder/codec%20intern/Collaborative%20Document%20Editor/frontend/src/pages/Login.jsx)
+A login form layout that submits email and password parameters and saves the returned JWT.
+
+#### [NEW] [Dashboard.jsx](file:///e:/Vishal%20Folder/codec%20intern/Collaborative%20Document%20Editor/frontend/src/pages/Dashboard.jsx)
+A placeholder dashboard page for logged-in users to display when authentication is validated.
+
+#### [MODIFY] [App.jsx](file:///e:/Vishal%20Folder/codec%20intern/Collaborative%20Document%20Editor/frontend/src/App.jsx)
+Configures client routing (`/`, `/login`, `/register`, `/dashboard`) using React Router, wraps components with `AuthProvider`, and applies `PrivateRoute` wrappers to dashboard components.
+
+---
+
+## Verification Plan
+
+### Automated/Scripted Tests
+We will verify endpoints using a local command line script executing requests using a standard client tool.
+
+### Manual Verification
+1. Open the React frontend locally.
+2. Go to `/register` and create a test account.
+3. Verify redirection to the dashboard, storage of JWT token in localStorage, and appearance of the Navbar displaying the user's name.
+4. Log out, verify redirect to `/login`, and attempt to access protected `/dashboard` path directly to confirm route locks.
+5. Log back in to verify the login flow.

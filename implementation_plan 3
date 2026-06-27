@@ -1,0 +1,74 @@
+# Implementation Plan - Phase 3: Document Model, CRUD Operations, and Sharing System
+
+This phase establishes the Document model, implements API endpoints for creating, sharing, listing, and deleting documents, enforces security rules using custom database access check helpers, and constructs the user dashboard and collaborator share modals.
+
+## Proposed Changes
+
+### Backend Components
+
+#### [NEW] [Document.js](file:///e:/Vishal%20Folder/codec%20intern/Collaborative%20Document%20Editor/backend/models/Document.js)
+Establish a Mongoose schema containing:
+- `title` (String, required, default "Untitled Document")
+- `content` (String, placeholder for collaborative rich text state)
+- `owner` (Ref pointing to `User` model, required)
+- `collaborators` (Array of subdocuments recording `{ user: ref User, role: 'editor' | 'viewer' }`)
+- `timestamps` (Manages `createdAt` and `updatedAt`)
+
+#### [NEW] [documentController.js](file:///e:/Vishal%20Folder/codec%20intern/Collaborative%20Document%20Editor/backend/controllers/documentController.js)
+Add route handlers for document management and validation logic:
+- `createDocument()`: Saves a new document database entry, assigning `req.user.id` as the owner.
+- `getAllDocuments()`: Returns a list of documents where the current user ID matches the owner field OR is listed in the `collaborators` array. Uses populate helper for user details.
+- `getDocumentById()`: Verifies if the requester is the owner or a listed collaborator. If valid, returns the document; otherwise block.
+- `updateDocument()`: Renames the document title. Restricted to owners and editors.
+- `deleteDocument()`: Deletes the document. Restricted exclusively to the owner.
+- `shareDocument()`: Looks up a collaborator by email. If found, appends them to the document's collaborator list with their specified role ('editor' or 'viewer').
+- `removeCollaborator()`: Removes a user from the collaborator array.
+
+#### [NEW] [documentAccess.js](file:///e:/Vishal%20Folder/codec%20intern/Collaborative%20Document%20Editor/backend/middleware/documentAccess.js)
+An Express middleware wrapper that intercepts request params `documentId`, looks up the target document, verifies permissions against the current user, and checks if they meet the required role tier (Viewer, Editor, Owner) before passing control to controllers.
+
+#### [NEW] [documentRoutes.js](file:///e:/Vishal%20Folder/codec%20intern/Collaborative%20Document%20Editor/backend/routes/documentRoutes.js)
+Maps and protects document routes:
+- `POST /` -> `createDocument` (protected)
+- `GET /` -> `getAllDocuments` (protected)
+- `GET /:id` -> `getDocumentById` (protected)
+- `PUT /:id` -> `updateDocument` (protected)
+- `DELETE /:id` -> `deleteDocument` (protected)
+- `POST /:id/share` -> `shareDocument` (protected)
+- `POST /:id/unshare` -> `removeCollaborator` (protected)
+
+#### [MODIFY] [server.js](file:///e:/Vishal%20Folder/codec%20intern/Collaborative%20Document%20Editor/backend/server.js)
+Register document routes with the path prefix `/api/documents`.
+
+---
+
+### Frontend Components
+
+#### [MODIFY] [Dashboard.jsx](file:///e:/Vishal%20Folder/codec%20intern/Collaborative%20Document%20Editor/frontend/src/pages/Dashboard.jsx)
+- Retrieve the active list of documents from the backend API.
+- Render dynamic list panels showing title, owner, last edited date, and collaborator role badges.
+- Render custom button triggers to delete owned documents, launch the sharing modal, or navigate to document pages.
+
+#### [NEW] [ShareModal.jsx](file:///e:/Vishal%20Folder/codec%20intern/Collaborative%20Document%20Editor/frontend/src/components/ShareModal.jsx)
+A modal layer containing:
+- Forms to add collaborator emails and assign roles.
+- Interactive list displaying all active collaborators.
+- Action triggers to call share/unshare APIs and refresh parent grids.
+
+#### [NEW] [DocumentPage.jsx](file:///e:/Vishal%20Folder/codec%20intern/Collaborative%20Document%20Editor/frontend/src/pages/DocumentPage.jsx)
+A placeholder workspace layout that verifies loading statuses, checking document metadata access before Phase 4.
+
+#### [MODIFY] [App.jsx](file:///e:/Vishal%20Folder/codec%20intern/Collaborative%20Document%20Editor/frontend/src/App.jsx)
+Register the `/document/:id` route inside the routing structure.
+
+---
+
+## Verification Plan
+
+### Manual Verification
+1. Open the app, log in as `userA@example.com` and create a new document.
+2. In another browser or incognito tab, register `userB@example.com`.
+3. In `userA`'s dashboard, click "Share", enter `userB@example.com`, select "Editor", and submit.
+4. Verify that the document immediately displays on `userB`'s dashboard card list with an "Editor" role badge.
+5. Test deleting the document from `userB`'s account to verify access control blocks the delete.
+6. Verify database records via local testing.

@@ -1,0 +1,62 @@
+# Implementation Plan - Phase 4: Real-Time Collaboration with Socket.IO and Yjs CRDT
+
+This plan covers the implementation of real-time sync using Yjs (CRDT), Tiptap editor integrations, Socket.IO room handling, carets/cursors syncing, and debounced database updates.
+
+## Proposed Package Additions (Frontend)
+We will install the following packages in `frontend/`:
+- `@tiptap/extension-collaboration` (Binds Tiptap document node structure directly to a Yjs Shared Type)
+- `@tiptap/extension-collaboration-cursor` (Syncs caret positions, selection highlights, and user presence indicators within Tiptap)
+
+---
+
+## Proposed Changes
+
+### Backend Components
+
+#### [NEW] [documentSocket.js](file:///e:/Vishal%20Folder/codec%20intern/Collaborative%20Document%20Editor/backend/sockets/documentSocket.js)
+Establish a centralized module mapping Socket.IO connection event triggers:
+- `join-document`: Enforces access permission checking by querying MongoDB. Adds the client connection to the document ID's socket room.
+- `document-change`: Receives Yjs state update vectors from a client. Broadcasts the update buffer to all other sockets in the same room.
+- `save-document`: Accepts document string states. Performs debounced updates to the MongoDB document content to avoid DB query bottlenecks.
+- `cursor-update`: Broadcasts cursor coordinates and name tag metadata.
+- `disconnecting` / `disconnect`: Cleans up active user references.
+
+#### [MODIFY] [server.js](file:///e:/Vishal%20Folder/codec%20intern/Collaborative%20Document%20Editor/backend/server.js)
+Import the `documentSocket` register method and bind it to the Socket.IO `io` server instance.
+
+---
+
+### Frontend Components
+
+#### [NEW] [DocumentEditor.jsx](file:///e:/Vishal%20Folder/codec%20intern/Collaborative%20Document%20Editor/frontend/src/pages/DocumentEditor.jsx)
+Build a collaborative text editor workspace containing:
+- Handshake connections to the Socket.IO server passing the JWT token.
+- Yjs `Y.Doc` state declarations.
+- Custom socket synchronization provider syncing `Y.Doc` updates with the backend server via `document-change` events.
+- Tiptap editor binding configuration loaded with `StarterKit`, `Collaboration`, and `CollaborationCursor` extensions.
+- Top bar editing tool controls (Bold, Italic, Headings, Lists).
+- Real-time document title renaming.
+- Live sidebar overlays.
+
+#### [NEW] [ActiveUsers.jsx](file:///e:/Vishal%20Folder/codec%20intern/Collaborative%20Document%20Editor/frontend/src/components/ActiveUsers.jsx)
+A header dashboard showing avatar badges and status profiles of all active editors in the workspace room.
+
+#### [MODIFY] [App.jsx](file:///e:/Vishal%20Folder/codec%20intern/Collaborative%20Document%20Editor/frontend/src/App.jsx)
+Import [DocumentEditor.jsx](file:///e:/Vishal%20Folder/codec%20intern/Collaborative%20Document%20Editor/frontend/src/pages/DocumentEditor.jsx) and replace the placeholder `DocumentPage` route with this fully featured collaborative workspace page.
+
+---
+
+## Verification Plan
+
+### Manual Verification
+1. Spin up both backend and frontend servers.
+2. Open two separate web browsers (e.g. Chrome and Firefox, or Chrome and an Incognito window).
+3. Log in as `User A` in one and `User B` in the other.
+4. Share a document owned by `User A` with `User B` as an Editor.
+5. Open the document in both browsers.
+6. Verify:
+   - Both users see each other's avatar circle in the top right.
+   - Typing in Browser A immediately syncs text inside Browser B without cursor jumping.
+   - Moving Browser A's cursor displays a color-coded caret with the name "User A" inside Browser B's editor.
+   - Changing the document title renames the title on both screens instantly.
+   - Inspecting console logs checks clean WebSocket payload transitions.

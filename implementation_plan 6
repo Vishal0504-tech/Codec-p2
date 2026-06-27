@@ -1,0 +1,41 @@
+# Implementation Plan - Phase 6: Markdown Support and Final Polish
+
+This plan covers the installation of markdown shortcuts, file download mechanics, keybinding managers, responsive styling, title auto-save triggers, live character/word counts, empty-state dashboard listings, and final developer review guides.
+
+## Proposed Package Additions (Frontend)
+- `tiptap-markdown` (Integrates markdown parsing, input rules, and markdown serialization within Tiptap)
+
+---
+
+## Proposed Changes
+
+### Frontend Components
+
+#### [MODIFY] [DocumentEditor.jsx](file:///e:/Vishal%20Folder/codec%20intern/Collaborative%20Document%20Editor/frontend/src/pages/DocumentEditor.jsx)
+- Import `Markdown` extension from `tiptap-markdown` and register it inside the Tiptap Editor instance.
+- Add "Export as Markdown" (.md) and "Export as Plain Text" (.txt) action buttons in the toolbar.
+- Implement file download triggers using `Blob` data structures and `URL.createObjectURL()`.
+- Register keyboard shortcuts for manual saving, undo, redo, and typographic toggling (Bold, Italic, Underline).
+- Attach an `onBlur` callback to the document title input, calling the title-update API to save titles automatically when the user clicks away.
+- Build a live status indicator showing: "Saved just now" or "Saving..." depending on socket save events.
+- Append a footer containing live word and character counters using the Tiptap editor character counting helpers (or simple text length queries).
+- Implement responsive CSS wrappers that collapse collaborative elements into a neat layout on mobile devices.
+
+#### [MODIFY] [Dashboard.jsx](file:///e:/Vishal%20Folder/codec%20intern/Collaborative%20Document%20Editor/frontend/src/pages/Dashboard.jsx)
+- Create a beautiful, polished empty-state template if the loaded documents list length is zero.
+- Display a modern illustration, friendly guidance text, and a prominent "Create your first document" call to action.
+
+---
+
+## Verification Plan
+
+### Automated / Bundling Check
+We will build the frontend to ensure all exports, keymaps, and Markdown extensions package without errors.
+
+### Manual Verification
+1. Open the editor, type `# heading` and verify it automatically formats as a Heading 1 on space.
+2. Verify keyboard shortcuts (e.g. `Ctrl+B`, `Ctrl+U`) apply formatting.
+3. Modify the document title and click away; verify title auto-saves in the DB and updates collaborators in real-time.
+4. Export the content as `.md` and `.txt` files; open the downloads to verify correct content formatting.
+5. Resize the browser to mobile width and verify collaborative indicators collapse beautifully.
+6. Delete all documents from the dashboard and verify the empty-state template is visible.

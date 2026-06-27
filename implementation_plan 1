@@ -1,0 +1,78 @@
+# Implementation Plan - Phase 1: Project Setup and Folder Structure
+
+This plan covers the initialization and setup of the Real-Time Collaborative Document Editor project. We will set up both the backend (Node.js/Express) and frontend (React/Vite/TailwindCSS) with their basic configurations.
+
+## Proposed Folder Structure
+
+We will structure the project into two main directories: `backend` and `frontend` in the workspace root: [Collaborative Document Editor](file:///e:/Vishal%20Folder/codec%20intern/Collaborative%20Document%20Editor).
+
+### Backend Structure
+- `backend/` - Contains all server-side logic, database configuration, authentication, and WebSocket handling.
+  - `config/` - Database and helper configurations.
+    - [db.js](file:///e:/Vishal%20Folder/codec%20intern/Collaborative%20Document%20Editor/backend/config/db.js) - MongoDB database connection setup.
+  - `controllers/` - Functions that handle incoming HTTP requests (auth, documents).
+    - `authController.js` - User registration, login, and profile fetching logic.
+    - `documentController.js` - CRUD operations for documents.
+  - `middleware/` - Custom Express middleware functions.
+    - `authMiddleware.js` - Validates JWT tokens to protect routes.
+  - `models/` - Mongoose database schemas.
+    - `User.js` - User database schema (username, email, password).
+    - `Document.js` - Document database schema (title, content/Yjs-state, owner, collaborators).
+  - `routes/` - Express route mappings to controllers.
+    - `authRoutes.js` - Authentication API endpoints.
+    - `documentRoutes.js` - Document API endpoints.
+  - `sockets/` - Socket.IO event handlers.
+    - `documentSocket.js` - Collab editing sync and presence/cursor handlers.
+  - [.env](file:///e:/Vishal%20Folder/codec%20intern/Collaborative%20Document%20Editor/backend/.env) - Local configuration and secret environment variables.
+  - [server.js](file:///e:/Vishal%20Folder/codec%20intern/Collaborative%20Document%20Editor/backend/server.js) - Entry point of the Express server that binds HTTP & WebSockets.
+  - `package.json` - Backend project metadata and dependencies.
+
+### Frontend Structure
+- `frontend/` - Contains the React single-page application.
+  - `src/` - Application source code.
+    - `components/` - Reusable UI widgets.
+      - `Editor.jsx` - Tiptap collab text editor wrapper.
+      - `Navbar.jsx` - Navigation bar with login/logout status.
+      - `CollaboratorList.jsx` - List of active users editing the document.
+    - `context/` - Global React Contexts.
+      - `AuthContext.jsx` - State for logged-in user and token validation.
+    - `pages/` - Views corresponding to routing pathways.
+      - `Login.jsx` - Login portal interface.
+      - `Register.jsx` - Sign up screen interface.
+      - `Dashboard.jsx` - Main view lists documents and lets users create new ones.
+      - `DocumentPage.jsx` - Interactive document editing page.
+    - `services/` - Modules interacting with external endpoints.
+      - `api.js` - Axios instance and helper methods for API calls.
+      - `socket.js` - Socket.IO client instance and connection state.
+    - [main.jsx](file:///e:/Vishal%20Folder/codec%20intern/Collaborative%20Document%20Editor/frontend/src/main.jsx) - Mounts the React application.
+    - [App.jsx](file:///e:/Vishal%20Folder/codec%20intern/Collaborative%20Document%20Editor/frontend/src/App.jsx) - Main router and application wrapper.
+    - [index.css](file:///e:/Vishal%20Folder/codec%20intern/Collaborative%20Document%20Editor/frontend/src/index.css) - Global stylesheets with Tailwind CSS imports.
+  - `index.html` - HTML skeleton document.
+  - `vite.config.js` - Configures Vite build system and dev server rules.
+  - `tailwind.config.js` - Stylesheet configuration for theme customization.
+  - `package.json` - Frontend dependencies and script shortcuts.
+
+---
+
+## Proposed Changes
+
+### Setup Operations
+
+We will execute commands in the shell to initialize the backend and frontend configurations.
+
+#### [NEW] [server.js](file:///e:/Vishal%20Folder/codec%20intern/Collaborative%20Document%20Editor/backend/server.js)
+Establish the Express app instance, connect to MongoDB, initialize Socket.IO, configure CORS, and start the listener on the specified port.
+
+#### [NEW] [.env](file:///e:/Vishal%20Folder/codec%20intern/Collaborative%20Document%20Editor/backend/.env)
+Store environmental settings including client domain patterns, database access links, server port, and JWT signs.
+
+---
+
+## Verification Plan
+
+### Manual Verification
+1. Run `node backend/server.js` (or use a dev command) to check if the server connects to MongoDB and initializes Socket.IO.
+2. Confirm console output:
+   - "Server is running on port 5000"
+   - "MongoDB connected successfully"
+3. Test WebSocket connection endpoint using a local check tool or browser page.
