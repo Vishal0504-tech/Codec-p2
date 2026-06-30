@@ -44,12 +44,31 @@ const app = express();
 // Socket.IO cannot run directly on an Express app instance; it needs a standard HTTP server instance.
 const server = http.createServer(app);
 
-// 3. CONFIGURE MIDDLEWARE
-// Enable CORS for Express routes. We allow credentials (like cookies/auth headers) and point the origin to our frontend URL.
-app.use(cors({
-  origin: process.env.CLIENT_URL || 'http://localhost:5173',
+// 3. CONFIGURE MIDDLEWARE AND DYNAMIC CORS
+const allowedOrigins = [
+  'http://localhost:5173',
+  process.env.CLIENT_URL
+].filter(Boolean);
+
+const corsOptions = {
+  origin: (origin, callback) => {
+    // Allow requests with no origin (like mobile apps, curl, or Postman)
+    if (!origin) return callback(null, true);
+    
+    // Check if origin matches allowed list or is a Vercel deployment domain
+    const isAllowed = allowedOrigins.includes(origin) || origin.endsWith('.vercel.app');
+    
+    if (isAllowed) {
+      callback(null, true);
+    } else {
+      console.log('Blocked by CORS:', origin);
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
   credentials: true
-}));
+};
+
+app.use(cors(corsOptions));
 
 // Express middleware to parse incoming JSON payloads in HTTP requests.
 app.use(express.json());
@@ -75,11 +94,7 @@ mongoose.connect(MONGODB_URI)
 // Mount Socket.IO onto the HTTP server.
 // We must configure CORS separately for Socket.IO so the frontend client can establish a WebSocket connection.
 const io = new Server(server, {
-  cors: {
-    origin: process.env.CLIENT_URL || 'http://localhost:5173',
-    methods: ['GET', 'POST'],
-    credentials: true
-  }
+  cors: corsOptions
 });
 
 // Expose the io instance to the Express app object.
