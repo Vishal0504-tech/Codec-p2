@@ -4,7 +4,7 @@ import React from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 
 // Import our custom authentication provider wrapper.
-import { AuthProvider } from './context/AuthContext';
+import { AuthProvider } from './context/AuthProvider';
 
 // Import reusable layout and protection components.
 import Navbar from './components/Navbar';
