@@ -12,8 +12,11 @@ import api from '../services/api';
 // Import the sharing modal dialog component.
 import ShareModal from '../components/ShareModal';
 
+// Import Socket.IO client to connect to our websocket server for real-time dashboard updates
+import { io } from 'socket.io-client';
+
 const Dashboard = () => {
-  const { user } = useAuth();
+  const { user, token } = useAuth();
   const navigate = useNavigate();
 
   // Document states
@@ -29,6 +32,32 @@ const Dashboard = () => {
   useEffect(() => {
     fetchDocuments();
   }, []);
+
+  // Establish Socket connection to listen for real-time document sharing/unsharing events
+  useEffect(() => {
+    if (!token) return;
+
+    // Connect to the WebSocket server using the environment URL or fallback
+    const socket = io(import.meta.env.VITE_SOCKET_URL || 'https://codec-p2.onrender.com', {
+      auth: { token },
+    });
+
+    socket.on('document-shared', (updatedDoc) => {
+      console.log('Real-time: Document shared with you:', updatedDoc);
+      // Re-fetch all documents to update dashboard list in real-time
+      fetchDocuments();
+    });
+
+    socket.on('document-unshared', ({ documentId }) => {
+      console.log('Real-time: Document unshared or deleted:', documentId);
+      // Instantly remove the document from the dashboard list
+      setDocuments((prev) => prev.filter((doc) => doc._id !== documentId));
+    });
+
+    return () => {
+      socket.disconnect();
+    };
+  }, [token]);
 
   /**
    * Fetch all documents owned by or shared with the user.

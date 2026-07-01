@@ -105,6 +105,12 @@ const registerDocumentSocket = (io) => {
     // Note: socket.user is populated by the handshake middleware in server.js
     console.log(`[Socket] Client connected to socket pipeline: ${socket.id} (User ID: ${socket.user?.id})`);
 
+    // Automatically join a user-specific room to receive real-time notifications (like document sharing)
+    if (socket.user?.id) {
+      socket.join(`user_${socket.user.id}`);
+      console.log(`[Socket] User ${socket.user.id} joined personal notification room user_${socket.user.id}`);
+    }
+
     // 1. JOIN DOCUMENT ROOM
     socket.on('join-document', async ({ documentId }) => {
       try {

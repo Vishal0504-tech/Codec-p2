@@ -117,6 +117,16 @@ exports.updateDocument = async (req, res) => {
 exports.deleteDocument = async (req, res) => {
   try {
     const doc = req.document; // Retrieve from middleware
+    
+    // Notify all collaborators in real-time via Socket.IO before deleting
+    const io = req.app.get('io');
+    if (io && doc.collaborators && doc.collaborators.length > 0) {
+      doc.collaborators.forEach((collab) => {
+        io.to(`user_${collab.user.toString()}`).emit('document-unshared', { documentId: doc._id });
+      });
+      console.log(`[Socket Emit] Emitted document-unshared on delete to collaborators for doc: ${doc._id}`);
+    }
+
     await Document.deleteOne({ _id: doc._id });
 
     return res.status(200).json({ message: 'Document deleted successfully', documentId: doc._id });
@@ -179,6 +189,13 @@ exports.shareDocument = async (req, res) => {
       .populate('owner', 'name email')
       .populate('collaborators.user', 'name email');
 
+    // Notify the target user in real-time via Socket.IO
+    const io = req.app.get('io');
+    if (io) {
+      io.to(`user_${targetUser._id.toString()}`).emit('document-shared', updatedDoc);
+      console.log(`[Socket Emit] Emitted document-shared to user_${targetUser._id.toString()} for doc: ${doc._id}`);
+    }
+
     return res.status(200).json(updatedDoc);
   } catch (error) {
     console.error('Share document error:', error);
@@ -210,6 +227,13 @@ exports.removeCollaborator = async (req, res) => {
     const updatedDoc = await Document.findById(doc._id)
       .populate('owner', 'name email')
       .populate('collaborators.user', 'name email');
+
+    // Notify the removed collaborator in real-time via Socket.IO
+    const io = req.app.get('io');
+    if (io) {
+      io.to(`user_${userId.toString()}`).emit('document-unshared', { documentId: doc._id });
+      console.log(`[Socket Emit] Emitted document-unshared to user_${userId.toString()} for doc: ${doc._id}`);
+    }
 
     return res.status(200).json(updatedDoc);
   } catch (error) {
