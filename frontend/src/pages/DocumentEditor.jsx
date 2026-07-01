@@ -47,6 +47,16 @@ const createCustomSave = (onSave) => {
   });
 };
 
+// Helper to convert Uint8Array to base64 string safely without stack size limits
+const base64FromUint8Array = (arr) => {
+  let binary = '';
+  const len = arr.byteLength;
+  for (let i = 0; i < len; i++) {
+    binary += String.fromCharCode(arr[i]);
+  }
+  return btoa(binary);
+};
+
 const DocumentEditor = () => {
   const { id: documentId } = useParams(); // Extract document ID from URL path params
   const navigate = useNavigate();
@@ -67,13 +77,20 @@ const DocumentEditor = () => {
   const socketRef = useRef(null);
   const ydocRef = useRef(null);
   const awarenessRef = useRef(null);
+  const localSaveTimeoutRef = useRef(null);
 
   // Manual save handler triggered by toolbar or Ctrl+S shortcut
   const handleManualSave = () => {
     if (socketRef.current && ydocRef.current) {
       setSaveStatus('Saving...');
+      
+      // Clear any pending debounced auto-save since we are doing it manually now
+      if (localSaveTimeoutRef.current) {
+        clearTimeout(localSaveTimeoutRef.current);
+      }
+      
       const fullDocState = Y.encodeStateAsUpdate(ydocRef.current);
-      const base64Content = btoa(String.fromCharCode(...fullDocState));
+      const base64Content = base64FromUint8Array(fullDocState);
       socketRef.current.emit('save-document', base64Content);
       console.log('[Manual Save] Triggered immediate save via shortcut/toolbar.');
     }
@@ -198,18 +215,27 @@ const DocumentEditor = () => {
         ydoc.on('update', (update, origin) => {
           // If the change didn't originate from the socket connection (it is a local edit)
           if (origin !== socket) {
-            // Emit the binary update to all other room collaborators
+            // Emit the lightweight binary update to all other room collaborators instantly
             socket.emit('document-change', update);
 
             // Update save indicator to show saving progress
             setSaveStatus('Saving...');
 
-            // Encode the full Yjs state vector and convert it to a base64 string
-            const fullDocState = Y.encodeStateAsUpdate(ydoc);
-            const base64Content = btoa(String.fromCharCode(...fullDocState));
-            
-            // Emit the current document content to trigger a debounced save in MongoDB
-            socket.emit('save-document', base64Content);
+            // Debounce the heavy full-state save emission to prevent mobile typing lag
+            if (localSaveTimeoutRef.current) {
+              clearTimeout(localSaveTimeoutRef.current);
+            }
+
+            localSaveTimeoutRef.current = setTimeout(() => {
+              if (ydoc && socket) {
+                // Encode the full Yjs state vector and convert it to a base64 string safely
+                const fullDocState = Y.encodeStateAsUpdate(ydoc);
+                const base64Content = base64FromUint8Array(fullDocState);
+                
+                // Emit the current document content to trigger a debounced save in MongoDB
+                socket.emit('save-document', base64Content);
+              }
+            }, 1500); // 1.5 second client-side debounce
           }
         });
 
