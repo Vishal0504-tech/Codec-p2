@@ -256,6 +256,7 @@ const DocumentEditor = () => {
         const myCaretColor = activeUsersList.find((u) => u.userId === user?.id)?.color || '#6366f1';
 
         editorInstance = new Editor({
+          editable: response.data.role !== 'viewer',
           extensions: [
             StarterKit.configure({
               // Disable standard history undo manager.

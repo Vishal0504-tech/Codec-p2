@@ -80,15 +80,10 @@ const Dashboard = () => {
    * Create a new document and redirect to the editor page.
    */
   const handleCreateDocument = async () => {
-    const title = prompt('Enter a title for your document:', 'Untitled Document');
-    
-    // If the user cancelled the prompt (title is null), exit.
-    if (title === null) return;
-
     setIsCreating(true);
     try {
       const response = await api.post('/documents', {
-        title: title.trim() || 'Untitled Document',
+        title: 'Untitled Document',
       });
       
       // Redirect directly to the collaborative editor page with the document's unique ID.
@@ -106,9 +101,6 @@ const Dashboard = () => {
    * @param {string} docId - The ID of the document to delete.
    */
   const handleDeleteDocument = async (docId) => {
-    const confirmDelete = window.confirm('Are you sure you want to delete this document? This action is permanent.');
-    if (!confirmDelete) return;
-
     try {
       await api.delete(`/documents/${docId}`);
       
