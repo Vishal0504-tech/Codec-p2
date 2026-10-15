@@ -1,9 +1,9 @@
 // server.js - Entry point for the Collaborative Document Editor Backend
 
 // 1. IMPORT REQUIRED MODULES
-// dotenv loads environment variables from a .env file into process.env.
+const path = require('path');
 const dotenv = require('dotenv');
-dotenv.config(); // Load environment variables before importing any config-dependent modules
+dotenv.config({ path: path.resolve(__dirname, '.env') }); // Load environment variables regardless of cwd
 
 // express is the standard web framework for Node.js, used to define HTTP routes and middleware.
 const express = require('express');
@@ -45,9 +45,15 @@ const app = express();
 const server = http.createServer(app);
 
 // 3. CONFIGURE MIDDLEWARE AND DYNAMIC CORS
+const clientUrl = process.env.CLIENT_URL ? process.env.CLIENT_URL.trim().replace(/\/+$/, '') : null;
+
 const allowedOrigins = [
   'http://localhost:5173',
-  process.env.CLIENT_URL
+  'http://localhost:5174',
+  'http://localhost:3000',
+  'http://127.0.0.1:5173',
+  'http://127.0.0.1:5174',
+  clientUrl
 ].filter(Boolean);
 
 const corsOptions = {
@@ -55,14 +61,18 @@ const corsOptions = {
     // Allow requests with no origin (like mobile apps, curl, or Postman)
     if (!origin) return callback(null, true);
     
-    // Check if origin matches allowed list or is a Vercel deployment domain
-    const isAllowed = allowedOrigins.includes(origin) || origin.endsWith('.vercel.app');
+    const cleanOrigin = origin.trim().replace(/\/+$/, '');
+    
+    // Check if origin matches allowed list, is localhost/127.0.0.1 on any port, or is a Vercel deployment domain
+    const isLocalhost = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(cleanOrigin);
+    const isVercel = cleanOrigin.endsWith('.vercel.app');
+    const isAllowed = isLocalhost || isVercel || allowedOrigins.includes(cleanOrigin);
     
     if (isAllowed) {
       callback(null, true);
     } else {
       console.log('Blocked by CORS:', origin);
-      callback(new Error('Not allowed by CORS'));
+      callback(null, false);
     }
   },
   credentials: true
@@ -75,12 +85,15 @@ app.use(express.json());
 
 // Register authentication routes with the Express router.
 app.use('/api/auth', authRoutes);
+app.use('/auth', authRoutes); // Fallback in case client environment omitted /api
 
 // Register document management routes with the Express router.
 app.use('/api/documents', documentRoutes);
+app.use('/documents', documentRoutes); // Fallback in case client environment omitted /api
 
 // Register document version history routes with the Express router.
 app.use('/api/documents', versionRoutes);
+app.use('/documents', versionRoutes); // Fallback in case client environment omitted /api
 
 
 // 4. DATABASE CONNECTION

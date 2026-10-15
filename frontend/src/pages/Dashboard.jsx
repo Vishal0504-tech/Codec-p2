@@ -38,7 +38,7 @@ const Dashboard = () => {
     if (!token) return;
 
     // Connect to the WebSocket server using the environment URL or fallback
-    const socket = io(import.meta.env.VITE_SOCKET_URL || 'https://codec-p2.onrender.com', {
+    const socket = io(import.meta.env.VITE_SOCKET_URL || 'https://codec-p2-1.onrender.com', {
       auth: { token },
     });
 

@@ -3,10 +3,22 @@
 // Import the axios library, which is a promise-based HTTP client for the browser and node.js.
 import axios from 'axios';
 
+// Helper to reliably compute API base URL
+const getBaseUrl = () => {
+  let url = (import.meta.env.VITE_API_URL || 'https://codec-p2-1.onrender.com/api').trim();
+  // Strip trailing slashes
+  url = url.replace(/\/+$/, '');
+  // Ensure the URL ends with /api
+  if (!url.endsWith('/api')) {
+    url = `${url}/api`;
+  }
+  return url;
+};
+
 // Create an instance of Axios with a customized configuration.
 // 'baseURL' sets the default prefix for all API request paths made using this client.
 const api = axios.create({
-  baseURL: import.meta.env.VITE_API_URL || 'https://codec-p2.onrender.com/api',
+  baseURL: getBaseUrl(),
   headers: {
     'Content-Type': 'application/json',
   },

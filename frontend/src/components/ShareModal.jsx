@@ -6,9 +6,6 @@ import React, { useState } from 'react';
 import api from '../services/api';
 
 const ShareModal = ({ isOpen, onClose, document, onUpdate }) => {
-  // If the modal is not open, do not render anything.
-  if (!isOpen || !document) return null;
-
   // Form input states
   const [email, setEmail] = useState('');
   const [role, setRole] = useState('editor');
@@ -17,6 +14,9 @@ const ShareModal = ({ isOpen, onClose, document, onUpdate }) => {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // If the modal is not open, do not render anything.
+  if (!isOpen || !document) return null;
 
   /**
    * Handle adding a collaborator.

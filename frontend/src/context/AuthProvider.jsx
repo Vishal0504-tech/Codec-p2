@@ -45,7 +45,8 @@ export const AuthProvider = ({ children }) => {
       return { success: true };
     } catch (error) {
       console.error('Registration API error:', error);
-      const errorMessage = error.response?.data?.message || 'Failed to register account';
+      const errorMessage = error.response?.data?.message 
+        || (!error.response ? 'Cannot connect to server. Please check your network or wait a moment for the server to spin up.' : 'Failed to register account');
       return { success: false, error: errorMessage };
     }
   };
@@ -70,7 +71,8 @@ export const AuthProvider = ({ children }) => {
       return { success: true };
     } catch (error) {
       console.error('Login API error:', error);
-      const errorMessage = error.response?.data?.message || 'Invalid email or password';
+      const errorMessage = error.response?.data?.message 
+        || (!error.response ? 'Cannot connect to server. Please check your network or wait a moment for the server to spin up.' : 'Invalid email or password');
       return { success: false, error: errorMessage };
     }
   };
