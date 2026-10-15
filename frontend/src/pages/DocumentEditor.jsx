@@ -69,19 +69,9 @@ const DocumentEditor = () => {
   const [activeUsersList, setActiveUsersList] = useState([]);
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
   const [isShareOpen, setIsShareOpen] = useState(false);
-  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [userRole, setUserRole] = useState('');
   const [restorationBanner, setRestorationBanner] = useState('');
   const [saveStatus, setSaveStatus] = useState('Saved just now');
-  const [headings, setHeadings] = useState([]);
-  const [activeHeadingId, setActiveHeadingId] = useState('');
-
-  // Expandable tree nodes in Table of Contents sidebar
-  const [expandedSections, setExpandedSections] = useState({
-    intro: true,
-    payments: true,
-    general: true,
-  });
 
   // Use refs to persist socket, Yjs document, and awareness structures across re-renders
   const socketRef = useRef(null);
@@ -106,55 +96,6 @@ const DocumentEditor = () => {
       setTimeout(() => {
         setSaveStatus('Saved just now');
       }, 500);
-    }
-  };
-
-  // Toggle Table of Contents tree nodes
-  const toggleSection = (key) => {
-    setExpandedSections((prev) => ({ ...prev, [key]: !prev[key] }));
-  };
-
-  // Extract headings from editor content for Table of Contents
-  useEffect(() => {
-    if (!editor) return;
-
-    const extractHeadings = () => {
-      const items = [];
-      editor.state.doc.descendants((node, pos) => {
-        if (node.type.name === 'heading') {
-          const text = node.textContent.trim();
-          if (text) {
-            items.push({
-              level: node.attrs.level,
-              text,
-              pos,
-            });
-          }
-        }
-      });
-      setHeadings(items);
-    };
-
-    extractHeadings();
-    editor.on('update', extractHeadings);
-
-    return () => {
-      editor.off('update', extractHeadings);
-    };
-  }, [editor]);
-
-  // Jump to specific heading position in editor
-  const scrollToHeading = (pos, text) => {
-    if (!editor) return;
-    setActiveHeadingId(text);
-    editor.chain().focus().setTextSelection(pos).run();
-    try {
-      const domNode = editor.view.domAtPos(pos).node;
-      if (domNode && domNode.scrollIntoView) {
-        domNode.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      }
-    } catch (e) {
-      console.warn('Scroll to heading handled via selection focus:', e);
     }
   };
 
@@ -536,17 +477,6 @@ const DocumentEditor = () => {
           >
             <span>🕒 History</span>
           </button>
-
-          {/* Toggle Sidebar button */}
-          <button
-            onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-            className="p-1 rounded text-slate-500 hover:text-slate-800 hover:bg-slate-100 border border-slate-200 transition-colors"
-            title={isSidebarOpen ? 'Hide Table of Contents' : 'Show Table of Contents'}
-          >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6h16M4 12h16M4 18h7" />
-            </svg>
-          </button>
         </div>
       </div>
 
@@ -752,139 +682,8 @@ const DocumentEditor = () => {
         </div>
       )}
 
-      {/* 3. WORKSPACE BODY: TWO COLUMNS (Sidebar + Document Paper Canvas) */}
+      {/* 3. WORKSPACE BODY: DOCUMENT PAPER CANVAS */}
       <div className="flex-1 flex overflow-hidden">
-        
-        {/* LEFT COLUMN: "Table of Content" SIDEBAR */}
-        {isSidebarOpen && (
-          <aside className="w-64 sm:w-72 bg-[#f8fafc] border-r border-slate-200 flex flex-col justify-between p-4 overflow-y-auto select-none relative flex-shrink-0">
-            <div>
-              <h3 className="font-bold text-slate-800 text-xs tracking-wider uppercase mb-3 text-slate-500">
-                Table of Content
-              </h3>
-
-              {/* Dynamic live headings parsed from the active editor document */}
-              {headings.length > 0 && (
-                <div className="mb-6 space-y-1">
-                  <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5 px-2">
-                    In this document
-                  </div>
-                  {headings.map((h, i) => (
-                    <button
-                      key={i}
-                      onClick={() => scrollToHeading(h.pos, h.text)}
-                      className={`w-full text-left px-2 py-1 rounded text-xs transition-colors flex items-center space-x-1.5 ${
-                        activeHeadingId === h.text
-                          ? 'bg-[#3366FF]/10 text-[#3366FF] font-semibold'
-                          : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/50'
-                      }`}
-                      style={{ paddingLeft: `${Math.min(h.level * 8, 24)}px` }}
-                    >
-                      <span className="text-[10px] text-slate-400 font-mono">H{h.level}</span>
-                      <span className="truncate">{h.text}</span>
-                    </button>
-                  ))}
-                </div>
-              )}
-
-              {/* Structured Documentation Outline (matching reference UI) */}
-              <div className="space-y-4 text-xs">
-                
-                {/* General Section */}
-                <div>
-                  <div className="font-bold text-slate-700 text-xs mb-1.5 flex items-center justify-between">
-                    <span>General</span>
-                  </div>
-                  <div className="pl-2 space-y-1 text-slate-600">
-                    <button
-                      onClick={() => toggleSection('intro')}
-                      className="w-full text-left py-1 font-medium hover:text-slate-900 flex items-center justify-between"
-                    >
-                      <span>Introduction</span>
-                      <span className="text-[10px] text-slate-400">{expandedSections.intro ? '▾' : '▸'}</span>
-                    </button>
-                    {expandedSections.intro && (
-                      <div className="pl-3 space-y-1.5 text-slate-500 border-l border-slate-200 my-1">
-                        <div className="cursor-pointer hover:text-[#3366FF] py-0.5">API Documentation</div>
-                        <div className="cursor-pointer hover:text-[#3366FF] py-0.5">REST API Basics</div>
-                        <div className="cursor-pointer hover:text-[#3366FF] py-0.5">Authentication</div>
-                        <div className="cursor-pointer hover:text-[#3366FF] py-0.5">Requests</div>
-                        <div className="cursor-pointer hover:text-[#3366FF] py-0.5">Pagination</div>
-                        <div className="cursor-pointer hover:text-[#3366FF] py-0.5">Throttling</div>
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                {/* Payments API Section */}
-                <div>
-                  <div className="font-bold text-slate-700 text-xs mb-1.5 flex items-center justify-between">
-                    <span>Payments API</span>
-                  </div>
-                  <div className="pl-2 space-y-1 text-slate-600">
-                    <button
-                      onClick={() => toggleSection('payments')}
-                      className="w-full text-left py-1 font-medium hover:text-slate-900 flex items-center justify-between"
-                    >
-                      <span>Create payments</span>
-                      <span className="text-[10px] text-slate-400">{expandedSections.payments ? '▾' : '▸'}</span>
-                    </button>
-                    {expandedSections.payments && (
-                      <div className="pl-3 space-y-1.5 text-slate-500 border-l border-slate-200 my-1">
-                        <div className="cursor-pointer text-[#3366FF] font-semibold py-0.5">Parameters</div>
-                        <div className="cursor-pointer hover:text-[#3366FF] py-0.5">Responses</div>
-                        <div className="cursor-pointer hover:text-[#3366FF] py-0.5">Example</div>
-                        <button
-                          onClick={insertParametersSection}
-                          className="text-[#3366FF] hover:underline text-[11px] pt-1 block"
-                        >
-                          + Add new child page
-                        </button>
-                      </div>
-                    )}
-                    <div className="cursor-pointer hover:text-slate-900 py-1 flex items-center justify-between">
-                      <span>Get payments</span>
-                      <span className="text-[10px] text-slate-400">›</span>
-                    </div>
-                    <div className="cursor-pointer hover:text-slate-900 py-1 flex items-center justify-between">
-                      <span>Cancel payment</span>
-                      <span className="text-[10px] text-slate-400">›</span>
-                    </div>
-                    <div className="cursor-pointer hover:text-slate-900 py-1 flex items-center justify-between">
-                      <span>List payments</span>
-                      <span className="text-[10px] text-slate-400">›</span>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Other APIs */}
-                <div className="space-y-1 text-slate-600 pt-1">
-                  <div className="cursor-pointer hover:text-slate-900 py-1 flex items-center justify-between font-semibold text-slate-700">
-                    <span>Methods API</span>
-                    <span className="text-[10px] text-slate-400">›</span>
-                  </div>
-                  <div className="cursor-pointer hover:text-slate-900 py-1 flex items-center justify-between font-semibold text-slate-700">
-                    <span>Refunds API</span>
-                    <span className="text-[10px] text-slate-400">›</span>
-                  </div>
-                  <div className="cursor-pointer hover:text-slate-900 py-1 flex items-center justify-between font-semibold text-slate-700">
-                    <span>Chargebacks API</span>
-                    <span className="text-[10px] text-slate-400">›</span>
-                  </div>
-                </div>
-
-              </div>
-            </div>
-
-            {/* DECORATIVE BLUE GRAPHIC (matching bottom-left arc in reference image) */}
-            <div className="mt-8 relative pointer-events-none overflow-hidden h-24 w-full">
-              <div className="absolute -bottom-10 -left-10 w-36 h-36 bg-[#3366FF] rounded-full opacity-80 filter blur-xl transform" />
-              <div className="absolute -bottom-8 -left-8 w-28 h-28 bg-[#3b5bf5] rounded-full opacity-90" />
-            </div>
-          </aside>
-        )}
-
-        {/* RIGHT COLUMN: MAIN DOCUMENT PAPER CANVAS */}
         <main className="flex-1 overflow-y-auto p-4 sm:p-8 flex flex-col items-center relative">
           
           <div className="w-full max-w-4xl relative">
