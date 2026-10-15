@@ -143,26 +143,61 @@ const Dashboard = () => {
     return { text: 'Viewer', style: 'bg-amber-50 text-amber-700 border-amber-200' };
   };
 
+  const [searchFilter, setSearchFilter] = useState('');
+
+  const filteredDocs = documents.filter((doc) =>
+    (doc.title || '').toLowerCase().includes(searchFilter.toLowerCase())
+  );
+
   return (
-    <div className="min-h-[calc(100vh-4rem)] bg-slate-50 py-8 px-4 sm:px-6 lg:px-8">
-      <div className="max-w-5xl mx-auto space-y-6">
+    <div className="min-h-[calc(100vh-6rem)] bg-[#f4f6fb] py-8 px-4 sm:px-6 lg:px-8">
+      <div className="max-w-6xl mx-auto space-y-6">
         
-        {/* Welcome Section */}
-        <div className="bg-white rounded-xl shadow border border-slate-100 p-8 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        {/* Welcome & Action Section */}
+        <div className="bg-white rounded-xl shadow-xs border border-slate-200 p-6 sm:p-8 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
           <div>
-            <h1 className="text-2xl sm:text-3xl font-bold text-slate-900 mb-2">My Documents</h1>
-            <p className="text-slate-500 text-sm">
-              Welcome back, <span className="font-semibold text-indigo-600">{user?.name}</span>! Here are the files you can edit and share.
+            <div className="flex items-center space-x-2 text-xs font-bold text-[#3366FF] uppercase tracking-wider mb-1">
+              <span>Codec Workspace</span>
+              <span>•</span>
+              <span>Documentation Hub</span>
+            </div>
+            <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">
+              Documents & API Guides
+            </h1>
+            <p className="text-slate-500 text-sm mt-1">
+              Collaborative workspace for <strong className="text-slate-700">{user?.name}</strong>. Create, edit, and share live documentation.
             </p>
           </div>
           
-          <button
-            onClick={handleCreateDocument}
-            disabled={isCreating}
-            className="self-start sm:self-center bg-indigo-600 hover:bg-indigo-500 text-white px-5 py-2.5 rounded-lg text-sm font-semibold transition-all duration-200 shadow-md hover:shadow cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {isCreating ? 'Creating...' : '➕ New Document'}
-          </button>
+          <div className="flex items-center space-x-3">
+            <button
+              onClick={handleCreateDocument}
+              disabled={isCreating}
+              className="bg-[#22c55e] hover:bg-[#16a34a] text-white px-5 py-2.5 rounded-lg text-sm font-bold transition-all duration-150 shadow-sm hover:shadow flex items-center space-x-2 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <span>+ New Document</span>
+            </button>
+          </div>
+        </div>
+
+        {/* Filter and Search Bar */}
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+          <div className="relative flex-1 max-w-md">
+            <svg className="w-4 h-4 text-slate-400 absolute left-3 top-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+            </svg>
+            <input
+              type="text"
+              placeholder="Filter documents by title..."
+              value={searchFilter}
+              onChange={(e) => setSearchFilter(e.target.value)}
+              className="w-full bg-white border border-slate-200 rounded-lg pl-9 pr-4 py-2 text-sm text-slate-800 placeholder-slate-400 outline-none focus:ring-2 focus:ring-[#3366FF] focus:border-[#3366FF] transition-all"
+            />
+          </div>
+
+          <div className="text-xs text-slate-500 font-medium">
+            Showing <strong className="text-slate-800">{filteredDocs.length}</strong> of {documents.length} documents
+          </div>
         </div>
 
         {/* Error Notification */}
@@ -174,27 +209,24 @@ const Dashboard = () => {
 
         {/* Main Grid View */}
         {loading ? (
-          // Spinner displayed while loading API data
           <div className="flex flex-col items-center justify-center py-20 space-y-4">
-            <div className="animate-spin rounded-full h-10 w-10 border-4 border-indigo-200 border-t-indigo-600"></div>
+            <div className="animate-spin rounded-full h-10 w-10 border-4 border-blue-200 border-t-[#3366FF]"></div>
             <p className="text-slate-500 text-sm font-medium">Fetching documents...</p>
           </div>
-        ) : documents.length > 0 ? (
-          // Grid panel for document lists
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {documents.map((doc) => {
+        ) : filteredDocs.length > 0 ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+            {filteredDocs.map((doc) => {
               const roleBadge = getUserRole(doc);
               const isDocOwner = doc.owner?._id === user?.id || doc.owner === user?.id;
 
               return (
-                <div key={doc._id} className="bg-white rounded-xl shadow-sm hover:shadow-md border border-slate-100 p-6 flex flex-col justify-between transition-all duration-200 group">
-                  <div className="space-y-4">
-                    {/* Header: Role Badge and Date */}
+                <div key={doc._id} className="bg-white rounded-xl shadow-2xs hover:shadow-md border border-slate-200 p-5 flex flex-col justify-between transition-all duration-200 group">
+                  <div className="space-y-3">
                     <div className="flex items-center justify-between">
-                      <span className={`px-2.5 py-0.5 rounded-full text-xs font-semibold border ${roleBadge.style}`}>
+                      <span className={`px-2.5 py-0.5 rounded-full text-[11px] font-bold border ${roleBadge.style}`}>
                         {roleBadge.text}
                       </span>
-                      <span className="text-xs text-slate-400">
+                      <span className="text-[11px] text-slate-400 font-medium">
                         {new Date(doc.updatedAt).toLocaleDateString(undefined, {
                           month: 'short',
                           day: 'numeric',
@@ -203,41 +235,40 @@ const Dashboard = () => {
                       </span>
                     </div>
 
-                    {/* Title and Owner Info */}
                     <div>
-                      <h3 className="text-lg font-bold text-slate-800 group-hover:text-indigo-600 transition-colors duration-150 line-clamp-1">
-                        {doc.title}
+                      <h3 className="text-base font-bold text-slate-800 group-hover:text-[#3366FF] transition-colors duration-150 line-clamp-1">
+                        {doc.title || 'Untitled Document'}
                       </h3>
-                      <p className="text-xs text-slate-500 mt-1">
-                        Owned by: <span className="font-medium">{isDocOwner ? 'You' : doc.owner?.name}</span>
+                      <p className="text-xs text-slate-400 mt-1">
+                        Author: <span className="font-medium text-slate-600">{isDocOwner ? 'You (Owner)' : doc.owner?.name}</span>
                       </p>
                     </div>
                   </div>
 
-                  {/* Actions Bar */}
-                  <div className="mt-6 pt-4 border-t border-slate-100 flex items-center justify-between">
+                  <div className="mt-5 pt-3 border-t border-slate-100 flex items-center justify-between">
                     <button
                       onClick={() => navigate(`/document/${doc._id}`)}
-                      className="text-sm font-semibold text-indigo-600 hover:text-indigo-500 transition-colors cursor-pointer"
+                      className="text-xs font-bold text-[#3366FF] hover:text-blue-700 transition-colors flex items-center space-x-1"
                     >
-                      Open Document →
+                      <span>Open Document</span>
+                      <span>→</span>
                     </button>
 
                     {isDocOwner && (
-                      <div className="flex items-center space-x-2">
+                      <div className="flex items-center space-x-1.5">
                         <button
                           onClick={() => setShareDoc(doc)}
-                          className="p-1.5 rounded-md hover:bg-slate-100 text-slate-500 hover:text-indigo-600 transition-all duration-150 cursor-pointer text-sm"
+                          className="px-2 py-1 rounded hover:bg-slate-100 text-slate-500 hover:text-[#3366FF] transition-colors text-xs font-semibold"
                           title="Share Document"
                         >
-                          👥 Share
+                          Share
                         </button>
                         <button
                           onClick={() => handleDeleteDocument(doc._id)}
-                          className="p-1.5 rounded-md hover:bg-red-50 text-slate-400 hover:text-red-600 transition-all duration-150 cursor-pointer text-sm"
+                          className="px-2 py-1 rounded hover:bg-red-50 text-slate-400 hover:text-red-600 transition-colors text-xs font-semibold"
                           title="Delete Document"
                         >
-                          🗑️ Delete
+                          Delete
                         </button>
                       </div>
                     )}
@@ -286,7 +317,7 @@ const Dashboard = () => {
             </p>
             <button
               onClick={handleCreateDocument}
-              className="bg-indigo-600 hover:bg-indigo-500 hover:-translate-y-0.5 active:translate-y-0 text-white px-6 py-3 rounded-xl text-sm font-bold transition-all duration-150 shadow-lg shadow-indigo-200 cursor-pointer flex items-center space-x-2"
+              className="bg-[#3366FF] hover:bg-blue-600 hover:-translate-y-0.5 active:translate-y-0 text-white px-6 py-3 rounded-xl text-sm font-bold transition-all duration-150 shadow-md shadow-blue-200 cursor-pointer flex items-center space-x-2"
             >
               <span>Create Your First Document</span>
               <span className="text-base">🚀</span>

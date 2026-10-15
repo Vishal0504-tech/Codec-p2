@@ -124,13 +124,13 @@ const ShareModal = ({ isOpen, onClose, document, onUpdate }) => {
                 required
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                placeholder="collaborator@example.com"
-                className="flex-1 appearance-none rounded-md px-3 py-2 border border-slate-300 placeholder-slate-400 text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm text-slate-900"
+                placeholder="colleague@example.com"
+                className="flex-1 appearance-none rounded-md px-3 py-2 border border-slate-300 placeholder-slate-400 text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#3366FF] focus:border-[#3366FF] sm:text-sm"
               />
               <select
                 value={role}
                 onChange={(e) => setRole(e.target.value)}
-                className="rounded-md px-3 py-2 border border-slate-300 text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 sm:text-sm bg-white"
+                className="rounded-md px-3 py-2 border border-slate-300 text-slate-700 focus:outline-none focus:ring-2 focus:ring-[#3366FF] sm:text-sm bg-white"
               >
                 <option value="editor">Editor (Can edit)</option>
                 <option value="viewer">Viewer (Read-only)</option>
@@ -138,7 +138,7 @@ const ShareModal = ({ isOpen, onClose, document, onUpdate }) => {
               <button
                 type="submit"
                 disabled={isSubmitting}
-                className="bg-indigo-600 hover:bg-indigo-500 text-white px-4 py-2 rounded-md text-sm font-semibold transition-colors duration-200 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                className="bg-[#3366FF] hover:bg-blue-600 text-white px-4 py-2 rounded-md text-sm font-semibold transition-colors duration-200 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed shadow-xs"
               >
                 {isSubmitting ? 'Sharing...' : 'Add'}
               </button>
@@ -156,7 +156,7 @@ const ShareModal = ({ isOpen, onClose, document, onUpdate }) => {
                   <p className="text-sm font-medium text-slate-800">{document.owner?.name}</p>
                   <p className="text-xs text-slate-400">{document.owner?.email}</p>
                 </div>
-                <span className="px-2 py-0.5 rounded text-xs font-semibold bg-indigo-100 text-indigo-800">
+                <span className="px-2 py-0.5 rounded text-xs font-semibold bg-blue-50 text-[#3366FF] border border-blue-200">
                   Owner
                 </span>
               </div>

@@ -1,5 +1,4 @@
-// pages/DocumentEditor.jsx - Real-Time Collaborative Document Editor Workspace
-
+// pages/DocumentEditor.jsx - Formal Collaborative Document & API Documentation Editor
 import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 
@@ -26,11 +25,10 @@ import { useAuth } from '../context/AuthContext';
 // Import Axios API client.
 import api from '../services/api';
 
-// Import ActiveUsers avatar display component.
+// Import modals and sub-panels
 import ActiveUsers from '../components/ActiveUsers';
-
-// Import VersionHistoryPanel sidebar drawer.
 import VersionHistoryPanel from '../components/VersionHistoryPanel';
+import ShareModal from '../components/ShareModal';
 
 // Define a custom Tiptap extension to handle custom keyboard shortcuts like Ctrl+S.
 const createCustomSave = (onSave) => {
@@ -58,7 +56,7 @@ const base64FromUint8Array = (arr) => {
 };
 
 const DocumentEditor = () => {
-  const { id: documentId } = useParams(); // Extract document ID from URL path params
+  const { id: documentId } = useParams();
   const navigate = useNavigate();
   const { user } = useAuth();
 
@@ -67,11 +65,23 @@ const DocumentEditor = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [docTitle, setDocTitle] = useState('Loading document...');
+  const [documentObj, setDocumentObj] = useState(null);
   const [activeUsersList, setActiveUsersList] = useState([]);
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
+  const [isShareOpen, setIsShareOpen] = useState(false);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [userRole, setUserRole] = useState('');
   const [restorationBanner, setRestorationBanner] = useState('');
   const [saveStatus, setSaveStatus] = useState('Saved just now');
+  const [headings, setHeadings] = useState([]);
+  const [activeHeadingId, setActiveHeadingId] = useState('');
+
+  // Expandable tree nodes in Table of Contents sidebar
+  const [expandedSections, setExpandedSections] = useState({
+    intro: true,
+    payments: true,
+    general: true,
+  });
 
   // Use refs to persist socket, Yjs document, and awareness structures across re-renders
   const socketRef = useRef(null);
@@ -83,17 +93,84 @@ const DocumentEditor = () => {
   const handleManualSave = () => {
     if (socketRef.current && ydocRef.current) {
       setSaveStatus('Saving...');
-      
-      // Clear any pending debounced auto-save since we are doing it manually now
+
       if (localSaveTimeoutRef.current) {
         clearTimeout(localSaveTimeoutRef.current);
       }
-      
+
       const fullDocState = Y.encodeStateAsUpdate(ydocRef.current);
       const base64Content = base64FromUint8Array(fullDocState);
       socketRef.current.emit('save-document', base64Content);
       console.log('[Manual Save] Triggered immediate save via shortcut/toolbar.');
+
+      setTimeout(() => {
+        setSaveStatus('Saved just now');
+      }, 500);
     }
+  };
+
+  // Toggle Table of Contents tree nodes
+  const toggleSection = (key) => {
+    setExpandedSections((prev) => ({ ...prev, [key]: !prev[key] }));
+  };
+
+  // Extract headings from editor content for Table of Contents
+  useEffect(() => {
+    if (!editor) return;
+
+    const extractHeadings = () => {
+      const items = [];
+      editor.state.doc.descendants((node, pos) => {
+        if (node.type.name === 'heading') {
+          const text = node.textContent.trim();
+          if (text) {
+            items.push({
+              level: node.attrs.level,
+              text,
+              pos,
+            });
+          }
+        }
+      });
+      setHeadings(items);
+    };
+
+    extractHeadings();
+    editor.on('update', extractHeadings);
+
+    return () => {
+      editor.off('update', extractHeadings);
+    };
+  }, [editor]);
+
+  // Jump to specific heading position in editor
+  const scrollToHeading = (pos, text) => {
+    if (!editor) return;
+    setActiveHeadingId(text);
+    editor.chain().focus().setTextSelection(pos).run();
+    try {
+      const domNode = editor.view.domAtPos(pos).node;
+      if (domNode && domNode.scrollIntoView) {
+        domNode.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+    } catch (e) {
+      console.warn('Scroll to heading handled via selection focus:', e);
+    }
+  };
+
+  // Quick Block Inserters
+  const insertEndpointCallout = () => {
+    if (!editor) return;
+    editor.chain().focus().insertContent(
+      `<blockquote><p><strong>POST</strong> &nbsp; <code>https://api.docurocket.com/v2/payments</code></p></blockquote><p>Authentication: <code>API keys</code> &nbsp; <code>OAuth access tokens</code></p>`
+    ).run();
+  };
+
+  const insertParametersSection = () => {
+    if (!editor) return;
+    editor.chain().focus().insertContent(
+      `<hr /><h3>Parameters</h3><ul><li><code>amount</code> (integer, required) - The amount to charge.</li><li><code>currency</code> (string, required) - 3-letter ISO code (e.g., EUR, USD).</li><li><code>description</code> (string) - An arbitrary description.</li></ul>`
+    ).run();
   };
 
   useEffect(() => {
@@ -102,11 +179,11 @@ const DocumentEditor = () => {
     const initializeEditor = async () => {
       try {
         // 1. FETCH DOCUMENT METADATA
-        // Check database connection and verify user has access rights.
         const response = await api.get(`/documents/${documentId}`);
         const documentData = response.data.document;
-        setDocTitle(documentData.title);
-        setUserRole(response.data.role); // Save role state ('owner', 'editor', or 'viewer')
+        setDocumentObj(documentData);
+        setDocTitle(documentData.title || 'Untitled Document');
+        setUserRole(response.data.role);
 
         // 2. INITIALIZE YJS DOCUMENT AND AWARENESS STATE
         const ydoc = new Y.Doc();
@@ -118,7 +195,7 @@ const DocumentEditor = () => {
         // 3. ESTABLISH SOCKET.IO CONNECTION WITH AUTH HANDSHAKE
         const socket = io(import.meta.env.VITE_SOCKET_URL || 'https://codec-p2-1.onrender.com', {
           auth: {
-            token: localStorage.getItem('token'), // Pass JWT for connection authentication
+            token: localStorage.getItem('token'),
           },
         });
         socketRef.current = socket;
@@ -127,155 +204,115 @@ const DocumentEditor = () => {
         socket.emit('join-document', { documentId });
 
         // 5. DEFINE SOCKET SYNC LISTENERS
-        // Listen for database content loaded from server on first connection.
         socket.on('load-document', (savedBase64Content) => {
           if (savedBase64Content) {
             try {
-              // Convert the base64 string back into a binary Uint8Array update vector
               const binaryUpdate = Uint8Array.from(atob(savedBase64Content), (c) => c.charCodeAt(0));
-              
-              // Apply the update to the Yjs doc
               Y.applyUpdate(ydoc, binaryUpdate);
             } catch (e) {
               console.error('Yjs initial state loading error:', e);
             }
           }
-          setLoading(false); // Stop loading indicator once synchronized
-        });
-
-        // Listen for real-time document changes emitted by other editors
-        socket.on('document-change', (binaryUpdate) => {
-          try {
-            // Apply the update vector to our local Yjs document.
-            // We pass the socket instance as the origin to prevent a feedback broadcast loop!
-            Y.applyUpdate(ydoc, new Uint8Array(binaryUpdate), socket);
-          } catch (e) {
-            console.error('Error applying remote document change:', e);
-          }
-        });
-
-        // Listen for collaborator carets / cursor updates
-        socket.on('awareness-change', (binaryUpdate) => {
-          try {
-            // Apply the awareness status update vector
-            awarenessProtocol.applyAwarenessUpdate(awareness, new Uint8Array(binaryUpdate), socket);
-          } catch (e) {
-            console.error('Error applying remote awareness update:', e);
-          }
-        });
-
-        // Listen for collaborator title renames
-        socket.on('title-update', (newTitle) => {
-          setDocTitle(newTitle);
-        });
-
-        // Listen for active users updates
-        socket.on('active-users-updated', (users) => {
-          setActiveUsersList(users);
-        });
-
-        // Listen for validation/permissions errors from server
-        socket.on('error', (errMsg) => {
-          setError(errMsg);
           setLoading(false);
         });
 
-        // Listen for save completion confirmation from the server
-        socket.on('document-saved', () => {
-          setSaveStatus('Saved just now');
-        });
-
-        // Listen for document restoration rollbacks triggered by the owner
-        socket.on('document-restored', ({ content, restoredBy }) => {
+        // Listen for incremental real-time edits from other collaborators
+        socket.on('document-update', (incomingBase64Update) => {
           try {
-            // Convert restored base64 updates to binary and apply to temporary Yjs document
-            const binaryUpdate = Uint8Array.from(atob(content), (c) => c.charCodeAt(0));
-            const tempDoc = new Y.Doc();
-            Y.applyUpdate(tempDoc, binaryUpdate);
-            const restoredHtml = tempDoc.getXmlFragment('default').toString();
-
-            // Set content on editorInstance
-            if (editorInstance) {
-              editorInstance.commands.setContent(restoredHtml || '<p></p>');
-            }
-
-            // Set premium notification banner toast
-            setRestorationBanner(`Document restored to a previous version by ${restoredBy}`);
-            // Dismiss after 4 seconds
-            setTimeout(() => {
-              setRestorationBanner('');
-            }, 4000);
-          } catch (err) {
-            console.error('Error applying restored document state:', err);
+            const binaryUpdate = Uint8Array.from(atob(incomingBase64Update), (c) => c.charCodeAt(0));
+            Y.applyUpdate(ydoc, binaryUpdate, 'server');
+          } catch (e) {
+            console.error('Error applying remote Yjs binary update:', e);
           }
         });
 
-        // 6. DETECT LOCAL EDITS AND SYNC TO SERVER
-        // Fires whenever a local keystroke or edit modifies the Yjs document
+        // Listen for title changes from other users
+        socket.on('title-updated', (newTitle) => {
+          setDocTitle(newTitle);
+        });
+
+        // Listen for active users list updates
+        socket.on('users-update', (users) => {
+          setActiveUsersList(users);
+
+          const awarenessStates = new Map();
+          users.forEach((u) => {
+            if (u.socketId) {
+              awarenessStates.set(u.socketId, {
+                user: {
+                  id: u.userId,
+                  name: u.name,
+                  color: u.color,
+                },
+              });
+            }
+          });
+          awareness.setLocalStateField('user', {
+            id: user?.id,
+            name: user?.name,
+            color: users.find((u) => u.userId === user?.id)?.color || '#3366FF',
+          });
+        });
+
+        // Version restoration listener
+        socket.on('document-restored', ({ versionNumber, restoredBy }) => {
+          setRestorationBanner(`Document restored to Version #${versionNumber} by ${restoredBy || 'a collaborator'}`);
+          setTimeout(() => setRestorationBanner(''), 6000);
+        });
+
+        // Handle socket errors
+        socket.on('error', (err) => {
+          console.error('Socket room access error:', err);
+          setError(err.message || 'Error communicating with collaboration server.');
+          setLoading(false);
+        });
+
+        // 6. SYNC LOCAL YJS CHANGES TO SERVER
         ydoc.on('update', (update, origin) => {
-          // If the change didn't originate from the socket connection (it is a local edit)
-          if (origin !== socket) {
-            // Emit the lightweight binary update to all other room collaborators instantly
-            socket.emit('document-change', update);
+          if (origin !== 'server') {
+            const base64Update = base64FromUint8Array(update);
+            socket.emit('document-update', base64Update);
 
-            // Update save indicator to show saving progress
             setSaveStatus('Saving...');
-
-            // Debounce the heavy full-state save emission to prevent mobile typing lag
             if (localSaveTimeoutRef.current) {
               clearTimeout(localSaveTimeoutRef.current);
             }
-
             localSaveTimeoutRef.current = setTimeout(() => {
-              if (ydoc && socket) {
-                // Encode the full Yjs state vector and convert it to a base64 string safely
-                const fullDocState = Y.encodeStateAsUpdate(ydoc);
-                const base64Content = base64FromUint8Array(fullDocState);
-                
-                // Emit the current document content to trigger a debounced save in MongoDB
-                socket.emit('save-document', base64Content);
-              }
-            }, 1500); // 1.5 second client-side debounce
+              const fullDocState = Y.encodeStateAsUpdate(ydoc);
+              const fullBase64Content = base64FromUint8Array(fullDocState);
+              socket.emit('save-document', fullBase64Content);
+              setSaveStatus('Saved just now');
+            }, 1000);
           }
         });
 
-        // 7. DETECT LOCAL CURSOR MOVEMENTS AND SYNC TO SERVER
-        // Fires when local caret positions or selections change
-        awareness.on('update', ({ added, updated, removed }, origin) => {
-          if (origin !== socket) {
-            const changedClients = added.concat(updated).concat(removed);
-            const awarenessUpdate = awarenessProtocol.encodeAwarenessUpdate(awareness, changedClients);
-            
-            // Emit cursor vectors to other collaborators
-            socket.emit('awareness-change', awarenessUpdate);
-          }
+        // 7. SYNC CURSOR PRESENCE
+        awareness.on('change', () => {
+          // Awareness updates handled automatically via Tiptap CollaborationCursor
         });
 
-        // 8. CONFIGURE AND INITIALIZE TIPTAP EDITOR
-        // Find our client's profile in the active users list to read their assigned caret color
-        const myCaretColor = activeUsersList.find((u) => u.userId === user?.id)?.color || '#6366f1';
+        // 8. INITIALIZE TIPTAP EDITOR INSTANCE
+        const myCaretColor = activeUsersList.find((u) => u.userId === user?.id)?.color || '#3366FF';
 
         editorInstance = new Editor({
           editable: response.data.role !== 'viewer',
           extensions: [
             StarterKit.configure({
-              // Disable standard history undo manager.
-              // We use Yjs's collaborative history instead to prevent overwriting others' undos.
-              history: false,
+              history: false, // Let Yjs handle undo/redo to avoid overwriting peers
             }),
             Underline,
             Collaboration.configure({
-              document: ydoc, // Bind Tiptap to our Yjs CRDT structure
+              document: ydoc,
             }),
             CollaborationCursor.configure({
-              provider: { awareness }, // Bind Tiptap presence to Yjs awareness
+              provider: { awareness },
               user: {
                 name: user?.name || 'Anonymous User',
-                color: myCaretColor, // Assign caret border highlight color
+                color: myCaretColor,
               },
             }),
-            Markdown, // Enables markdown copy/paste and input shortcuts (e.g. typing # heading)
-            createCustomSave(handleManualSave), // Registers Ctrl+S custom keyboard shortcut handler
+            Markdown,
+            createCustomSave(handleManualSave),
           ],
         });
 
@@ -300,22 +337,15 @@ const DocumentEditor = () => {
     };
   }, [documentId, user]);
 
-  /**
-   * Sync document title updates.
-   * @param {object} e - Input change event.
-   */
+  // Rename document title
   const handleTitleChange = (e) => {
     const newTitle = e.target.value;
     setDocTitle(newTitle);
-    
-    // Broadcast renamed title to other active collaborators.
-    // The server will handle updating MongoDB.
     if (socketRef.current) {
       socketRef.current.emit('title-update', newTitle);
     }
   };
 
-  // Triggers when the user clicks away from the title input (onBlur)
   const handleTitleBlur = async () => {
     const trimmedTitle = docTitle.trim();
     if (trimmedTitle === '') {
@@ -341,7 +371,7 @@ const DocumentEditor = () => {
     }
   };
 
-  // Convert Tiptap editor content to Markdown and trigger file download
+  // Convert Tiptap editor content to Markdown and download
   const exportAsMarkdown = () => {
     if (!editor) return;
     try {
@@ -360,7 +390,7 @@ const DocumentEditor = () => {
     }
   };
 
-  // Convert Tiptap editor content to Plain Text and trigger file download
+  // Convert Tiptap editor content to Plain Text and download
   const exportAsPlainText = () => {
     if (!editor) return;
     try {
@@ -379,17 +409,18 @@ const DocumentEditor = () => {
     }
   };
 
-  // Calculate live word and character counts from the editor instance
+  // Calculate live word and character counts
   const editorText = editor?.getText() || '';
   const charCount = editorText.length;
   const wordCount = editorText.trim() === '' ? 0 : editorText.trim().split(/\s+/).filter(Boolean).length;
+  const pageEstimate = Math.max(1, Math.ceil(wordCount / 350));
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-slate-50 flex items-center justify-center">
-        <div className="flex flex-col items-center space-y-4">
-          <div className="animate-spin rounded-full h-10 w-10 border-4 border-indigo-200 border-t-indigo-600"></div>
-          <p className="text-slate-500 text-sm font-medium">Entering collaborative workspace...</p>
+      <div className="min-h-[calc(100vh-6rem)] bg-[#f4f6fb] flex items-center justify-center">
+        <div className="flex flex-col items-center space-y-4 bg-white p-8 rounded-xl shadow-sm border border-slate-200">
+          <div className="animate-spin rounded-full h-10 w-10 border-4 border-blue-200 border-t-[#3366FF]"></div>
+          <p className="text-slate-600 text-sm font-semibold">Opening collaborative document...</p>
         </div>
       </div>
     );
@@ -397,16 +428,16 @@ const DocumentEditor = () => {
 
   if (error) {
     return (
-      <div className="min-h-screen bg-slate-50 py-12 px-4 flex flex-col items-center justify-center">
-        <div className="bg-white rounded-xl shadow p-8 max-w-md w-full text-center border border-slate-100">
+      <div className="min-h-[calc(100vh-6rem)] bg-[#f4f6fb] py-12 px-4 flex flex-col items-center justify-center">
+        <div className="bg-white rounded-xl shadow-md p-8 max-w-md w-full text-center border border-slate-200">
           <span className="text-4xl mb-4 inline-block">⚠️</span>
           <h2 className="text-xl font-bold text-slate-800 mb-2">Access Denied</h2>
           <p className="text-slate-500 text-sm mb-6">{error}</p>
           <button
             onClick={() => navigate('/dashboard')}
-            className="bg-indigo-600 hover:bg-indigo-500 text-white px-4 py-2 rounded-md text-sm font-semibold transition-all duration-200 cursor-pointer w-full"
+            className="bg-[#3366FF] hover:bg-blue-600 text-white px-5 py-2 rounded-md text-sm font-semibold transition-all duration-200 w-full"
           >
-            Return to Dashboard
+            Return to Documents
           </button>
         </div>
       </div>
@@ -414,230 +445,536 @@ const DocumentEditor = () => {
   }
 
   return (
-    <div className="min-h-[calc(100vh-4rem)] bg-slate-50 py-6 px-4 sm:px-6 lg:px-8">
-      <div className="max-w-4xl mx-auto space-y-4">
+    <div className="min-h-[calc(100vh-6rem)] flex flex-col bg-[#f4f6fb]">
+      
+      {/* 1. DOCUMENT ACTION & METADATA BAR (Matching the reference screenshot) */}
+      <div className="bg-white border-b border-slate-200 px-4 sm:px-8 py-2.5 flex items-center justify-between gap-4 flex-wrap z-20">
         
-        {/* TOP BAR BAR LAYOUT */}
-        <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-100 flex flex-col md:flex-row gap-4 md:items-center md:justify-between">
-          <div className="flex items-center space-x-3 flex-1 flex-wrap gap-2">
-            <button
-              onClick={() => navigate('/dashboard')}
-              className="text-slate-500 hover:text-slate-700 text-sm font-semibold cursor-pointer border border-slate-200 px-3 py-1.5 rounded-lg hover:bg-slate-50 transition-colors"
-            >
-              ← Dashboard
-            </button>
+        {/* Left Side: Back button, Green Save button, and Inline Document Name */}
+        <div className="flex items-center space-x-3 flex-1 min-w-[280px]">
+          {/* < Back Button */}
+          <button
+            onClick={() => navigate('/dashboard')}
+            className="border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 text-xs font-semibold px-3 py-1.5 rounded shadow-2xs flex items-center space-x-1 transition-colors"
+          >
+            <span>&lt; Back</span>
+          </button>
+
+          {/* Vibrant Green Save Button */}
+          <button
+            onClick={handleManualSave}
+            className="bg-[#22c55e] hover:bg-[#16a34a] text-white text-xs font-bold px-4 py-1.5 rounded shadow-xs flex items-center space-x-1.5 transition-all cursor-pointer"
+            title="Save changes (Ctrl+S)"
+          >
+            {saveStatus === 'Saving...' ? (
+              <>
+                <svg className="animate-spin h-3.5 w-3.5 text-white" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path>
+                </svg>
+                <span>Saving...</span>
+              </>
+            ) : (
+              <span>Save</span>
+            )}
+          </button>
+
+          {/* Document Name label & input */}
+          <div className="flex items-center space-x-1.5 ml-1">
+            <span className="text-xs text-slate-400 font-medium hidden sm:inline">Document Name:</span>
             <input
               type="text"
               value={docTitle}
               onChange={handleTitleChange}
               onBlur={handleTitleBlur}
-              className="font-bold text-slate-800 text-lg sm:text-xl border-b border-transparent hover:border-slate-200 focus:border-indigo-500 focus:outline-none transition-colors px-1 py-0.5 min-w-[150px] max-w-[280px] md:max-w-none"
+              className="text-xs sm:text-sm font-semibold text-slate-800 bg-transparent hover:bg-slate-100/70 focus:bg-white focus:ring-1 focus:ring-[#3366FF] px-2 py-0.5 rounded outline-none transition-colors max-w-[180px] sm:max-w-xs md:max-w-md truncate"
               title="Click to rename document"
             />
-            {/* Live save indicator status badge */}
-            <span className={`text-[10px] sm:text-xs font-bold px-2 py-0.5 rounded-full transition-all duration-200 ${
-              saveStatus === 'Saving...'
-                ? 'bg-amber-100 text-amber-800 animate-pulse'
-                : 'bg-emerald-100 text-emerald-800'
-            }`}>
-              {saveStatus}
+          </div>
+        </div>
+
+        {/* Right Side: Badges and Actions */}
+        <div className="flex items-center space-x-2.5">
+          {/* Editors [count] badge */}
+          <div className="bg-white border border-slate-200 text-slate-600 px-2.5 py-1 rounded text-xs font-semibold flex items-center space-x-1.5 shadow-2xs">
+            <span>Editors</span>
+            <span className="bg-[#3366FF] text-white font-bold px-1.5 py-0.2 rounded text-[10px] leading-tight">
+              {activeUsersList.length || 1}
             </span>
           </div>
-          
+
+          {/* Pages [count] badge */}
+          <div className="bg-white border border-slate-200 text-slate-600 px-2.5 py-1 rounded text-xs font-semibold flex items-center space-x-1.5 shadow-2xs">
+            <span>Pages</span>
+            <span className="bg-[#3366FF] text-white font-bold px-1.5 py-0.2 rounded text-[10px] leading-tight">
+              {pageEstimate}
+            </span>
+          </div>
+
           {/* Active Collaborators Avatars Circle stack */}
-          <div className="flex items-center justify-end">
+          <div className="hidden lg:block">
             <ActiveUsers users={activeUsersList} />
           </div>
+
+          {/* Share Modal Trigger */}
+          <button
+            onClick={() => setIsShareOpen(true)}
+            className="bg-white hover:bg-slate-50 border border-slate-300 hover:border-[#3366FF] text-[#3366FF] text-xs font-semibold px-3 py-1 rounded shadow-2xs flex items-center space-x-1 transition-all"
+            title="Share with collaborators"
+          >
+            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
+            </svg>
+            <span>Share</span>
+          </button>
+
+          {/* Version History Trigger */}
+          <button
+            onClick={() => setIsHistoryOpen(true)}
+            className="bg-white hover:bg-slate-50 border border-slate-300 text-slate-600 hover:text-slate-800 text-xs font-semibold px-2.5 py-1 rounded shadow-2xs flex items-center space-x-1 transition-all"
+            title="View revision history"
+          >
+            <span>🕒 History</span>
+          </button>
+
+          {/* Toggle Sidebar button */}
+          <button
+            onClick={() => setIsSidebarOpen(!isSidebarOpen)}
+            className="p-1 rounded text-slate-500 hover:text-slate-800 hover:bg-slate-100 border border-slate-200 transition-colors"
+            title={isSidebarOpen ? 'Hide Table of Contents' : 'Show Table of Contents'}
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6h16M4 12h16M4 18h7" />
+            </svg>
+          </button>
         </div>
-
-        {/* EDITOR CONTROLS TOOLBAR */}
-        {editor && (
-          <div className="bg-white p-2 rounded-xl shadow-sm border border-slate-100 flex flex-wrap gap-1 items-center">
-            {/* Bold Toggle */}
-            <button
-              onClick={() => editor.chain().focus().toggleBold().run()}
-              className={`p-2 rounded hover:bg-slate-100 text-sm font-bold cursor-pointer transition-colors ${
-                editor.isActive('bold') ? 'bg-indigo-50 text-indigo-600' : 'text-slate-600'
-              }`}
-              title="Bold (Ctrl+B)"
-            >
-              B
-            </button>
-
-            {/* Italic Toggle */}
-            <button
-              onClick={() => editor.chain().focus().toggleItalic().run()}
-              className={`p-2 rounded hover:bg-slate-100 text-sm italic cursor-pointer transition-colors ${
-                editor.isActive('italic') ? 'bg-indigo-50 text-indigo-600' : 'text-slate-600'
-              }`}
-              title="Italic (Ctrl+I)"
-            >
-              I
-            </button>
-
-            {/* Underline Toggle */}
-            <button
-              onClick={() => editor.chain().focus().toggleUnderline().run()}
-              className={`p-2 rounded hover:bg-slate-100 text-sm underline cursor-pointer transition-colors ${
-                editor.isActive('underline') ? 'bg-indigo-50 text-indigo-600' : 'text-slate-600'
-              }`}
-              title="Underline (Ctrl+U)"
-            >
-              U
-            </button>
-
-            <div className="h-6 w-[1px] bg-slate-200 mx-1"></div>
-
-            {/* Heading 1 */}
-            <button
-              onClick={() => editor.chain().focus().toggleHeading({ level: 1 }).run()}
-              className={`p-2 rounded hover:bg-slate-100 text-sm font-semibold cursor-pointer transition-colors ${
-                editor.isActive('heading', { level: 1 }) ? 'bg-indigo-50 text-indigo-600' : 'text-slate-600'
-              }`}
-              title="Heading 1"
-            >
-              H1
-            </button>
-
-            {/* Heading 2 */}
-            <button
-              onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()}
-              className={`p-2 rounded hover:bg-slate-100 text-sm font-semibold cursor-pointer transition-colors ${
-                editor.isActive('heading', { level: 2 }) ? 'bg-indigo-50 text-indigo-600' : 'text-slate-600'
-              }`}
-              title="Heading 2"
-            >
-              H2
-            </button>
-
-            <div className="h-6 w-[1px] bg-slate-200 mx-1"></div>
-
-            {/* Bullet List */}
-            <button
-              onClick={() => editor.chain().focus().toggleBulletList().run()}
-              className={`p-2 rounded hover:bg-slate-100 text-sm cursor-pointer transition-colors ${
-                editor.isActive('bulletList') ? 'bg-indigo-50 text-indigo-600' : 'text-slate-600'
-              }`}
-              title="Bullet List"
-            >
-              • List
-            </button>
-
-            {/* Ordered List */}
-            <button
-              onClick={() => editor.chain().focus().toggleOrderedList().run()}
-              className={`p-2 rounded hover:bg-slate-100 text-sm cursor-pointer transition-colors ${
-                editor.isActive('orderedList') ? 'bg-indigo-50 text-indigo-600' : 'text-slate-600'
-              }`}
-              title="Ordered List"
-            >
-              1. List
-            </button>
-
-            <div className="h-6 w-[1px] bg-slate-200 mx-1"></div>
-
-            {/* Undo Trigger */}
-            <button
-              onClick={() => editor.chain().focus().undo().run()}
-              disabled={!editor.can().undo()}
-              className="p-2 rounded hover:bg-slate-100 text-slate-600 text-sm cursor-pointer transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
-              title="Undo"
-            >
-              ↩
-            </button>
-
-            {/* Redo Trigger */}
-            <button
-              onClick={() => editor.chain().focus().redo().run()}
-              disabled={!editor.can().redo()}
-              className="p-2 rounded hover:bg-slate-100 text-slate-600 text-sm cursor-pointer transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
-              title="Redo"
-            >
-              ↪
-            </button>
-
-            <div className="h-6 w-[1px] bg-slate-200 mx-1"></div>
-
-            {/* Manual Save Action */}
-            <button
-              onClick={handleManualSave}
-              className="p-1.5 px-3 rounded-lg hover:bg-slate-100 text-slate-600 text-xs font-semibold cursor-pointer transition-colors flex items-center space-x-1 border border-slate-250 bg-slate-50/50"
-              title="Save Document (Ctrl+S)"
-            >
-              <span>💾 Save</span>
-            </button>
-
-            {/* Version History Trigger */}
-            <button
-              onClick={() => setIsHistoryOpen(true)}
-              className="p-1.5 px-3 rounded-lg hover:bg-slate-100 text-slate-600 text-xs font-semibold cursor-pointer transition-colors flex items-center space-x-1 border border-slate-250 bg-slate-50/50"
-              title="View Version History"
-            >
-              <span>🕒 History</span>
-            </button>
-
-            <div className="h-6 w-[1px] bg-slate-200 mx-1"></div>
-
-            {/* Export as Markdown Trigger */}
-            <button
-              onClick={exportAsMarkdown}
-              className="p-1.5 px-3 rounded-lg hover:bg-slate-100 text-slate-600 text-xs font-semibold cursor-pointer transition-colors flex items-center space-x-1 border border-slate-250 bg-slate-50/50 hover:text-indigo-600 hover:border-indigo-200"
-              title="Export as Markdown (.md)"
-            >
-              <span>📥 Export .MD</span>
-            </button>
-
-            {/* Export as Plain Text Trigger */}
-            <button
-              onClick={exportAsPlainText}
-              className="p-1.5 px-3 rounded-lg hover:bg-slate-100 text-slate-600 text-xs font-semibold cursor-pointer transition-colors flex items-center space-x-1 border border-slate-250 bg-slate-50/50 hover:text-indigo-600 hover:border-indigo-200"
-              title="Export as Text (.txt)"
-            >
-              <span>📥 Export .TXT</span>
-            </button>
-          </div>
-        )}
-
-        {/* EDITOR AREA PAGE WRAPPER */}
-        <div className="bg-white rounded-xl shadow-md border border-slate-100 p-8 sm:p-12 min-h-[550px] focus-within:ring-2 focus-within:ring-indigo-500/10 focus-within:border-indigo-500 transition-all duration-200">
-          <EditorContent editor={editor} className="prose max-w-none text-slate-700" />
-        </div>
-
-        {/* Editor Metrics Footer */}
-        {editor && (
-          <div className="max-w-4xl mx-auto mt-4 px-4 py-3 border border-slate-200 rounded-xl bg-white flex items-center justify-between text-xs text-slate-400 font-semibold uppercase tracking-wider shadow-xs">
-            <div className="flex space-x-4">
-              <span>Words: <strong className="text-slate-600">{wordCount}</strong></span>
-              <span>Characters: <strong className="text-slate-600">{charCount}</strong></span>
-            </div>
-            <div className="flex space-x-1.5 items-center text-indigo-500">
-              <span className="h-1.5 w-1.5 rounded-full bg-indigo-500 animate-ping" />
-              <span>Collab-Sync Active</span>
-            </div>
-          </div>
-        )}
-
       </div>
 
-      {/* FLOATING BANNER NOTIFICATION (RESTORATION TOAST) */}
+      {/* 2. RICH ACTION FORMATTING TOOLBAR (Matching reference image) */}
+      {editor && (
+        <div className="bg-white border-b border-slate-200 px-4 sm:px-8 py-1.5 flex items-center gap-1 flex-wrap sticky top-0 z-10 shadow-2xs text-slate-700">
+          
+          {/* History undo/redo */}
+          <button
+            onClick={() => editor.chain().focus().undo().run()}
+            disabled={!editor.can().undo()}
+            className="p-1.5 rounded hover:bg-slate-100 disabled:opacity-30 disabled:hover:bg-transparent font-bold text-sm"
+            title="Undo"
+          >
+            ↺
+          </button>
+          <button
+            onClick={() => editor.chain().focus().redo().run()}
+            disabled={!editor.can().redo()}
+            className="p-1.5 rounded hover:bg-slate-100 disabled:opacity-30 disabled:hover:bg-transparent font-bold text-sm"
+            title="Redo"
+          >
+            ↻
+          </button>
+
+          <div className="h-4 w-[1px] bg-slate-200 mx-1" />
+
+          {/* Bold, Italic, Underline, Strike, Font */}
+          <button
+            onClick={() => editor.chain().focus().toggleBold().run()}
+            className={`p-1.5 px-2 rounded text-xs font-bold transition-colors ${
+              editor.isActive('bold') ? 'bg-[#3366FF]/10 text-[#3366FF]' : 'hover:bg-slate-100'
+            }`}
+            title="Bold"
+          >
+            B
+          </button>
+          <button
+            onClick={() => editor.chain().focus().toggleItalic().run()}
+            className={`p-1.5 px-2 rounded text-xs italic font-serif transition-colors ${
+              editor.isActive('italic') ? 'bg-[#3366FF]/10 text-[#3366FF]' : 'hover:bg-slate-100'
+            }`}
+            title="Italic"
+          >
+            I
+          </button>
+          <button
+            onClick={() => editor.chain().focus().toggleUnderline().run()}
+            className={`p-1.5 px-2 rounded text-xs underline transition-colors ${
+              editor.isActive('underline') ? 'bg-[#3366FF]/10 text-[#3366FF]' : 'hover:bg-slate-100'
+            }`}
+            title="Underline"
+          >
+            U
+          </button>
+          <button
+            onClick={() => editor.chain().focus().toggleStrike().run()}
+            className={`p-1.5 px-2 rounded text-xs line-through transition-colors ${
+              editor.isActive('strike') ? 'bg-[#3366FF]/10 text-[#3366FF]' : 'hover:bg-slate-100'
+            }`}
+            title="Strikethrough"
+          >
+            S
+          </button>
+
+          <div className="h-4 w-[1px] bg-slate-200 mx-1" />
+
+          {/* Heading Levels H1, H2, H3, H4, P */}
+          <button
+            onClick={() => editor.chain().focus().toggleHeading({ level: 1 }).run()}
+            className={`p-1.5 px-2 rounded text-xs font-extrabold transition-colors ${
+              editor.isActive('heading', { level: 1 }) ? 'bg-[#3366FF]/10 text-[#3366FF]' : 'hover:bg-slate-100'
+            }`}
+            title="Heading 1"
+          >
+            H1
+          </button>
+          <button
+            onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()}
+            className={`p-1.5 px-2 rounded text-xs font-bold transition-colors ${
+              editor.isActive('heading', { level: 2 }) ? 'bg-[#3366FF]/10 text-[#3366FF]' : 'hover:bg-slate-100'
+            }`}
+            title="Heading 2"
+          >
+            H2
+          </button>
+          <button
+            onClick={() => editor.chain().focus().toggleHeading({ level: 3 }).run()}
+            className={`p-1.5 px-2 rounded text-xs font-semibold transition-colors ${
+              editor.isActive('heading', { level: 3 }) ? 'bg-[#3366FF]/10 text-[#3366FF]' : 'hover:bg-slate-100'
+            }`}
+            title="Heading 3"
+          >
+            H3
+          </button>
+          <button
+            onClick={() => editor.chain().focus().toggleHeading({ level: 4 }).run()}
+            className={`p-1.5 px-1.5 rounded text-[11px] font-medium transition-colors ${
+              editor.isActive('heading', { level: 4 }) ? 'bg-[#3366FF]/10 text-[#3366FF]' : 'hover:bg-slate-100'
+            }`}
+            title="Heading 4"
+          >
+            H4
+          </button>
+          <button
+            onClick={() => editor.chain().focus().setParagraph().run()}
+            className={`p-1.5 px-2 rounded text-xs font-bold transition-colors ${
+              editor.isActive('paragraph') ? 'bg-[#3366FF]/10 text-[#3366FF]' : 'hover:bg-slate-100'
+            }`}
+            title="Paragraph"
+          >
+            P
+          </button>
+
+          <div className="h-4 w-[1px] bg-slate-200 mx-1" />
+
+          {/* Lists */}
+          <button
+            onClick={() => editor.chain().focus().toggleBulletList().run()}
+            className={`p-1.5 px-2 rounded text-xs transition-colors ${
+              editor.isActive('bulletList') ? 'bg-[#3366FF]/10 text-[#3366FF]' : 'hover:bg-slate-100'
+            }`}
+            title="Bullet list"
+          >
+            •≡
+          </button>
+          <button
+            onClick={() => editor.chain().focus().toggleOrderedList().run()}
+            className={`p-1.5 px-2 rounded text-xs transition-colors ${
+              editor.isActive('orderedList') ? 'bg-[#3366FF]/10 text-[#3366FF]' : 'hover:bg-slate-100'
+            }`}
+            title="Numbered list"
+          >
+            1≡
+          </button>
+
+          <div className="h-4 w-[1px] bg-slate-200 mx-1" />
+
+          {/* Code, Quote, Divider */}
+          <button
+            onClick={() => editor.chain().focus().toggleCodeBlock().run()}
+            className={`p-1.5 px-2 rounded text-xs font-mono transition-colors ${
+              editor.isActive('codeBlock') ? 'bg-[#3366FF]/10 text-[#3366FF]' : 'hover:bg-slate-100'
+            }`}
+            title="Code Block"
+          >
+            &lt;&nbsp;&gt;
+          </button>
+          <button
+            onClick={() => editor.chain().focus().toggleBlockquote().run()}
+            className={`p-1.5 px-2 rounded text-xs font-serif transition-colors ${
+              editor.isActive('blockquote') ? 'bg-[#3366FF]/10 text-[#3366FF]' : 'hover:bg-slate-100'
+            }`}
+            title="Blockquote"
+          >
+            &rdquo;
+          </button>
+          <button
+            onClick={() => editor.chain().focus().setHorizontalRule().run()}
+            className="p-1.5 px-2 rounded text-xs hover:bg-slate-100"
+            title="Insert Horizontal Divider"
+          >
+            —
+          </button>
+
+          <div className="h-4 w-[1px] bg-slate-200 mx-1" />
+
+          {/* Quick API Documentation Snippets */}
+          <button
+            onClick={insertEndpointCallout}
+            className="text-[11px] font-semibold text-slate-600 hover:text-[#3366FF] hover:bg-slate-100 px-2 py-1 rounded border border-slate-200 flex items-center space-x-1"
+            title="Insert API endpoint callout block"
+          >
+            <span>+ API Endpoint</span>
+          </button>
+          <button
+            onClick={insertParametersSection}
+            className="text-[11px] font-semibold text-slate-600 hover:text-[#3366FF] hover:bg-slate-100 px-2 py-1 rounded border border-slate-200 flex items-center space-x-1"
+            title="Insert parameters table"
+          >
+            <span>+ Parameters</span>
+          </button>
+
+          <div className="flex-1" />
+
+          {/* Export Dropdown / Buttons */}
+          <div className="flex items-center space-x-1 text-xs">
+            <button
+              onClick={exportAsMarkdown}
+              className="px-2 py-1 rounded hover:bg-slate-100 text-slate-500 hover:text-slate-800 font-medium"
+              title="Download as Markdown"
+            >
+              📥 MD
+            </button>
+            <button
+              onClick={exportAsPlainText}
+              className="px-2 py-1 rounded hover:bg-slate-100 text-slate-500 hover:text-slate-800 font-medium"
+              title="Download as Plain Text"
+            >
+              📄 TXT
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* 3. WORKSPACE BODY: TWO COLUMNS (Sidebar + Document Paper Canvas) */}
+      <div className="flex-1 flex overflow-hidden">
+        
+        {/* LEFT COLUMN: "Table of Content" SIDEBAR */}
+        {isSidebarOpen && (
+          <aside className="w-64 sm:w-72 bg-[#f8fafc] border-r border-slate-200 flex flex-col justify-between p-4 overflow-y-auto select-none relative flex-shrink-0">
+            <div>
+              <h3 className="font-bold text-slate-800 text-xs tracking-wider uppercase mb-3 text-slate-500">
+                Table of Content
+              </h3>
+
+              {/* Dynamic live headings parsed from the active editor document */}
+              {headings.length > 0 && (
+                <div className="mb-6 space-y-1">
+                  <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5 px-2">
+                    In this document
+                  </div>
+                  {headings.map((h, i) => (
+                    <button
+                      key={i}
+                      onClick={() => scrollToHeading(h.pos, h.text)}
+                      className={`w-full text-left px-2 py-1 rounded text-xs transition-colors flex items-center space-x-1.5 ${
+                        activeHeadingId === h.text
+                          ? 'bg-[#3366FF]/10 text-[#3366FF] font-semibold'
+                          : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/50'
+                      }`}
+                      style={{ paddingLeft: `${Math.min(h.level * 8, 24)}px` }}
+                    >
+                      <span className="text-[10px] text-slate-400 font-mono">H{h.level}</span>
+                      <span className="truncate">{h.text}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+
+              {/* Structured Documentation Outline (matching reference UI) */}
+              <div className="space-y-4 text-xs">
+                
+                {/* General Section */}
+                <div>
+                  <div className="font-bold text-slate-700 text-xs mb-1.5 flex items-center justify-between">
+                    <span>General</span>
+                  </div>
+                  <div className="pl-2 space-y-1 text-slate-600">
+                    <button
+                      onClick={() => toggleSection('intro')}
+                      className="w-full text-left py-1 font-medium hover:text-slate-900 flex items-center justify-between"
+                    >
+                      <span>Introduction</span>
+                      <span className="text-[10px] text-slate-400">{expandedSections.intro ? '▾' : '▸'}</span>
+                    </button>
+                    {expandedSections.intro && (
+                      <div className="pl-3 space-y-1.5 text-slate-500 border-l border-slate-200 my-1">
+                        <div className="cursor-pointer hover:text-[#3366FF] py-0.5">API Documentation</div>
+                        <div className="cursor-pointer hover:text-[#3366FF] py-0.5">REST API Basics</div>
+                        <div className="cursor-pointer hover:text-[#3366FF] py-0.5">Authentication</div>
+                        <div className="cursor-pointer hover:text-[#3366FF] py-0.5">Requests</div>
+                        <div className="cursor-pointer hover:text-[#3366FF] py-0.5">Pagination</div>
+                        <div className="cursor-pointer hover:text-[#3366FF] py-0.5">Throttling</div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Payments API Section */}
+                <div>
+                  <div className="font-bold text-slate-700 text-xs mb-1.5 flex items-center justify-between">
+                    <span>Payments API</span>
+                  </div>
+                  <div className="pl-2 space-y-1 text-slate-600">
+                    <button
+                      onClick={() => toggleSection('payments')}
+                      className="w-full text-left py-1 font-medium hover:text-slate-900 flex items-center justify-between"
+                    >
+                      <span>Create payments</span>
+                      <span className="text-[10px] text-slate-400">{expandedSections.payments ? '▾' : '▸'}</span>
+                    </button>
+                    {expandedSections.payments && (
+                      <div className="pl-3 space-y-1.5 text-slate-500 border-l border-slate-200 my-1">
+                        <div className="cursor-pointer text-[#3366FF] font-semibold py-0.5">Parameters</div>
+                        <div className="cursor-pointer hover:text-[#3366FF] py-0.5">Responses</div>
+                        <div className="cursor-pointer hover:text-[#3366FF] py-0.5">Example</div>
+                        <button
+                          onClick={insertParametersSection}
+                          className="text-[#3366FF] hover:underline text-[11px] pt-1 block"
+                        >
+                          + Add new child page
+                        </button>
+                      </div>
+                    )}
+                    <div className="cursor-pointer hover:text-slate-900 py-1 flex items-center justify-between">
+                      <span>Get payments</span>
+                      <span className="text-[10px] text-slate-400">›</span>
+                    </div>
+                    <div className="cursor-pointer hover:text-slate-900 py-1 flex items-center justify-between">
+                      <span>Cancel payment</span>
+                      <span className="text-[10px] text-slate-400">›</span>
+                    </div>
+                    <div className="cursor-pointer hover:text-slate-900 py-1 flex items-center justify-between">
+                      <span>List payments</span>
+                      <span className="text-[10px] text-slate-400">›</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Other APIs */}
+                <div className="space-y-1 text-slate-600 pt-1">
+                  <div className="cursor-pointer hover:text-slate-900 py-1 flex items-center justify-between font-semibold text-slate-700">
+                    <span>Methods API</span>
+                    <span className="text-[10px] text-slate-400">›</span>
+                  </div>
+                  <div className="cursor-pointer hover:text-slate-900 py-1 flex items-center justify-between font-semibold text-slate-700">
+                    <span>Refunds API</span>
+                    <span className="text-[10px] text-slate-400">›</span>
+                  </div>
+                  <div className="cursor-pointer hover:text-slate-900 py-1 flex items-center justify-between font-semibold text-slate-700">
+                    <span>Chargebacks API</span>
+                    <span className="text-[10px] text-slate-400">›</span>
+                  </div>
+                </div>
+
+              </div>
+            </div>
+
+            {/* DECORATIVE BLUE GRAPHIC (matching bottom-left arc in reference image) */}
+            <div className="mt-8 relative pointer-events-none overflow-hidden h-24 w-full">
+              <div className="absolute -bottom-10 -left-10 w-36 h-36 bg-[#3366FF] rounded-full opacity-80 filter blur-xl transform" />
+              <div className="absolute -bottom-8 -left-8 w-28 h-28 bg-[#3b5bf5] rounded-full opacity-90" />
+            </div>
+          </aside>
+        )}
+
+        {/* RIGHT COLUMN: MAIN DOCUMENT PAPER CANVAS */}
+        <main className="flex-1 overflow-y-auto p-4 sm:p-8 flex flex-col items-center relative">
+          
+          <div className="w-full max-w-4xl relative">
+            
+            {/* FLOATING LEFT-GUTTER QUICK-INSERT HELPER (Matching screenshot) */}
+            <div className="hidden lg:flex flex-col items-center space-y-1 absolute -left-12 top-24 bg-white border border-slate-200 rounded-md p-1 shadow-xs z-10 text-slate-600">
+              <button
+                onClick={insertEndpointCallout}
+                className="w-7 h-7 rounded hover:bg-[#3366FF]/10 hover:text-[#3366FF] flex items-center justify-center text-xs font-bold transition-colors"
+                title="Insert Block"
+              >
+                +
+              </button>
+              <button
+                onClick={() => editor?.chain().focus().toggleHeading({ level: 1 }).run()}
+                className="w-7 h-7 rounded hover:bg-[#3366FF]/10 hover:text-[#3366FF] flex items-center justify-center text-[10px] font-bold transition-colors"
+                title="Heading 1"
+              >
+                H1
+              </button>
+              <button
+                onClick={() => editor?.chain().focus().setParagraph().run()}
+                className="w-7 h-7 rounded hover:bg-[#3366FF]/10 hover:text-[#3366FF] flex items-center justify-center text-[10px] font-bold transition-colors"
+                title="Paragraph"
+              >
+                P
+              </button>
+              <button
+                onClick={() => editor?.chain().focus().toggleCodeBlock().run()}
+                className="w-7 h-7 rounded hover:bg-[#3366FF]/10 hover:text-[#3366FF] flex items-center justify-center text-[9px] font-mono transition-colors"
+                title="Code snippet"
+              >
+                &lt;&gt;
+              </button>
+            </div>
+
+            {/* DOCUMENT PAPER SHEET */}
+            <div className="bg-white rounded-lg shadow-sm border border-slate-200/90 p-8 sm:p-14 min-h-[900px] transition-all focus-within:shadow-md">
+              
+              {/* Tiptap Collaborative Editor Content */}
+              <EditorContent editor={editor} className="prose max-w-none text-slate-700 outline-none" />
+
+            </div>
+
+            {/* Document Metrics & Sync Status Footer */}
+            <div className="mt-3 px-4 py-2.5 bg-white border border-slate-200 rounded-lg flex items-center justify-between text-xs text-slate-400 font-medium shadow-2xs">
+              <div className="flex items-center space-x-4">
+                <span>Words: <strong className="text-slate-600 font-semibold">{wordCount}</strong></span>
+                <span>Characters: <strong className="text-slate-600 font-semibold">{charCount}</strong></span>
+                <span>Est. Pages: <strong className="text-slate-600 font-semibold">{pageEstimate}</strong></span>
+              </div>
+              <div className="flex items-center space-x-2 text-[#3366FF]">
+                <span className="h-2 w-2 rounded-full bg-[#3366FF] animate-pulse" />
+                <span className="font-semibold text-[11px] tracking-wide">Real-time Sync Active</span>
+              </div>
+            </div>
+
+          </div>
+        </main>
+      </div>
+
+      {/* FLOATING RESTORATION BANNER */}
       {restorationBanner && (
-        <div className="fixed bottom-5 right-5 z-50 flex items-center space-x-2 rounded-xl bg-slate-900 px-5 py-3.5 text-sm font-semibold text-white shadow-2xl border border-slate-800">
-          <span className="text-base">🔄</span>
+        <div className="fixed bottom-6 right-6 z-50 flex items-center space-x-2.5 rounded-lg bg-slate-900 px-4 py-3 text-xs font-semibold text-white shadow-2xl border border-slate-800 animate-in fade-in slide-in-from-bottom-2">
+          <span>🔄</span>
           <span>{restorationBanner}</span>
         </div>
       )}
 
-      {/* VERSION HISTORY PANEL SIDEBAR */}
+      {/* VERSION HISTORY PANEL SIDEBAR DRAWER */}
       <VersionHistoryPanel
         documentId={documentId}
         isOpen={isHistoryOpen}
         onClose={() => setIsHistoryOpen(false)}
         isOwner={userRole === 'owner'}
-        onRestore={(restoredBase64) => {
-          // The Socket listener will handle setContent for us.
+        onRestore={() => {
           setIsHistoryOpen(false);
         }}
       />
+
+      {/* SHARE MODAL DIALOG */}
+      {isShareOpen && documentObj && (
+        <ShareModal
+          isOpen={isShareOpen}
+          onClose={() => setIsShareOpen(false)}
+          document={documentObj}
+          onUpdate={(updated) => setDocumentObj(updated)}
+        />
+      )}
+
     </div>
   );
 };

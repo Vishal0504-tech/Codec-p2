@@ -1,67 +1,107 @@
-// components/Navbar.jsx - Top Navigation Bar Component
-
-import React from 'react';
+// components/Navbar.jsx - Modern Top Navigation Bar
+import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-
-// Import our custom authentication context hook.
 import { useAuth } from '../context/AuthContext';
 
 const Navbar = () => {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
+  const [searchQuery, setSearchQuery] = useState('');
 
   const handleLogout = () => {
     logout();
-    navigate('/login'); // Redirect to login page after logout
+    navigate('/login');
   };
 
   return (
-    <nav className="bg-slate-900 text-white shadow-md">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex items-center justify-between h-16">
-          {/* Logo / Brand Name */}
-          <div className="flex-shrink-0 flex items-center">
-            <Link to="/" className="text-xl font-bold tracking-wider text-indigo-400 hover:text-indigo-300 transition-colors duration-200">
-              CollabDoc 📝
-            </Link>
-          </div>
+    <header className="w-full select-none z-30">
+      {/* TOP APP BAR - ROYAL BLUE BRAND BAR */}
+      <div className="bg-[#3366FF] text-white px-4 sm:px-6 h-14 flex items-center justify-between shadow-xs">
+        {/* Left: Brand Icon, Name & Navigation */}
+        <div className="flex items-center space-x-6">
+          <Link to="/dashboard" className="flex items-center space-x-2.5 group">
+            {/* Pill Logo */}
+            <div className="w-8 h-8 rounded-full bg-white flex items-center justify-center shadow-sm group-hover:scale-105 transition-transform">
+              <span className="text-[#3366FF] font-extrabold text-base leading-none">D</span>
+            </div>
+            <span className="text-white font-bold text-lg tracking-tight group-hover:opacity-95">
+              DocuRocket
+            </span>
+          </Link>
 
-          {/* Navigation Links and Authentication Controls */}
-          <div className="flex items-center space-x-4">
-            {user ? (
-              // Renders if the user is authenticated (logged in)
-              <div className="flex items-center space-x-4">
-                <span className="text-sm text-slate-300">
-                  Welcome, <strong className="text-white font-medium">{user.name}</strong>
-                </span>
-                <button
-                  onClick={handleLogout}
-                  className="bg-indigo-600 hover:bg-indigo-500 text-white px-4 py-2 rounded-md text-sm font-medium transition-all duration-200 cursor-pointer shadow-sm hover:shadow"
-                >
-                  Logout
-                </button>
-              </div>
-            ) : (
-              // Renders if the user is a guest (logged out)
-              <div className="flex items-center space-x-3">
-                <Link
-                  to="/login"
-                  className="text-slate-300 hover:text-white px-3 py-2 rounded-md text-sm font-medium transition-colors duration-200"
-                >
-                  Login
-                </Link>
-                <Link
-                  to="/register"
-                  className="bg-indigo-600 hover:bg-indigo-500 text-white px-4 py-2 rounded-md text-sm font-medium transition-all duration-200 shadow-sm hover:shadow"
-                >
-                  Register
-                </Link>
-              </div>
-            )}
+          {/* Documents Direct Link */}
+          {user && (
+            <Link
+              to="/dashboard"
+              className="text-white/90 hover:text-white text-xs font-semibold px-3 py-1.5 rounded-md hover:bg-white/10 transition-colors flex items-center space-x-1.5"
+            >
+              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+              </svg>
+              <span>Documents</span>
+            </Link>
+          )}
+
+          {/* Search Bar */}
+          <div className="hidden sm:flex items-center bg-white/15 hover:bg-white/20 focus-within:bg-white/25 rounded-md px-3 py-1.5 w-64 md:w-80 transition-colors">
+            <svg className="w-4 h-4 text-white/70 mr-2 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+            </svg>
+            <input
+              type="text"
+              placeholder="Search documents..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="bg-transparent text-sm text-white placeholder-white/70 outline-none w-full"
+            />
           </div>
         </div>
+
+        {/* Right Controls */}
+        <div className="flex items-center space-x-3">
+          {user ? (
+            <>
+              {/* User Avatar Circle */}
+              <div className="flex items-center space-x-2 pl-2">
+                <div
+                  className="w-8 h-8 rounded-full bg-white/20 border border-white/40 flex items-center justify-center text-xs font-bold text-white shadow-xs"
+                  title={user.email}
+                >
+                  {user.name ? user.name.slice(0, 2).toUpperCase() : 'U'}
+                </div>
+                <span className="hidden lg:inline text-xs font-medium text-white/90">
+                  {user.name}
+                </span>
+              </div>
+
+              {/* Logout Button */}
+              <button
+                onClick={handleLogout}
+                className="text-xs bg-white/10 hover:bg-red-500/80 text-white px-2.5 py-1.5 rounded-md transition-colors font-medium ml-1 cursor-pointer"
+                title="Log out"
+              >
+                Logout
+              </button>
+            </>
+          ) : (
+            <div className="flex items-center space-x-2">
+              <Link
+                to="/login"
+                className="text-white/90 hover:text-white px-3 py-1.5 rounded-md text-xs font-semibold hover:bg-white/10 transition-colors"
+              >
+                Sign In
+              </Link>
+              <Link
+                to="/register"
+                className="bg-white text-[#3366FF] hover:bg-white/90 px-3.5 py-1.5 rounded-md text-xs font-bold transition-all shadow-sm"
+              >
+                Get Started
+              </Link>
+            </div>
+          )}
+        </div>
       </div>
-    </nav>
+    </header>
   );
 };
 

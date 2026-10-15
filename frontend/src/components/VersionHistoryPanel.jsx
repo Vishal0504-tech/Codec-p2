@@ -206,7 +206,7 @@ const VersionHistoryPanel = ({ documentId, isOpen, onClose, isOwner, onRestore }
               {isOwner ? (
                 <button
                   onClick={() => setShowConfirmModal(true)}
-                  className="w-full rounded-xl bg-indigo-600 px-4 py-3 text-sm font-bold text-white shadow-md hover:bg-indigo-700 active:bg-indigo-800 transition duration-150"
+                  className="w-full rounded-xl bg-[#3366FF] px-4 py-3 text-sm font-bold text-white shadow-md hover:bg-blue-600 active:bg-blue-700 transition duration-150"
                 >
                   Restore this version
                 </button>
@@ -234,7 +234,7 @@ const VersionHistoryPanel = ({ documentId, isOpen, onClose, isOwner, onRestore }
                 <div
                   key={version._id}
                   onClick={() => handleSelectVersion(version)}
-                  className="flex items-center justify-between rounded-xl border border-zinc-150 p-4 hover:border-indigo-200 hover:bg-indigo-50/20 cursor-pointer transition"
+                  className="flex items-center justify-between rounded-xl border border-zinc-150 p-4 hover:border-blue-200 hover:bg-blue-50/20 cursor-pointer transition"
                 >
                   <div className="flex flex-col space-y-1">
                     <span className="text-sm font-bold text-zinc-800">
@@ -289,7 +289,7 @@ const VersionHistoryPanel = ({ documentId, isOpen, onClose, isOwner, onRestore }
                 type="button"
                 onClick={handleConfirmRestore}
                 disabled={isRestoring}
-                className="inline-flex justify-center rounded-xl bg-indigo-600 px-4 py-2.5 text-xs font-bold text-white hover:bg-indigo-700 active:bg-indigo-800 shadow-md transition"
+                className="inline-flex justify-center rounded-xl bg-[#3366FF] px-4 py-2.5 text-xs font-bold text-white hover:bg-blue-600 active:bg-blue-700 shadow-md transition"
               >
                 {isRestoring ? (
                   <div className="flex items-center space-x-1.5">
