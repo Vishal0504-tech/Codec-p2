@@ -25,7 +25,7 @@ const Navbar = () => {
               <span className="text-[#3366FF] font-extrabold text-base leading-none">D</span>
             </div>
             <span className="text-white font-bold text-lg tracking-tight group-hover:opacity-95">
-              DocuRocket
+            SyncWrite
             </span>
           </Link>
 
@@ -43,18 +43,7 @@ const Navbar = () => {
           )}
 
           {/* Search Bar */}
-          <div className="hidden sm:flex items-center bg-white/15 hover:bg-white/20 focus-within:bg-white/25 rounded-md px-3 py-1.5 w-64 md:w-80 transition-colors">
-            <svg className="w-4 h-4 text-white/70 mr-2 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-            </svg>
-            <input
-              type="text"
-              placeholder="Search documents..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="bg-transparent text-sm text-white placeholder-white/70 outline-none w-full"
-            />
-          </div>
+          
         </div>
 
         {/* Right Controls */}

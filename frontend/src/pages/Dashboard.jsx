@@ -157,12 +157,11 @@ const Dashboard = () => {
         <div className="bg-white rounded-xl shadow-xs border border-slate-200 p-6 sm:p-8 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
           <div>
             <div className="flex items-center space-x-2 text-xs font-bold text-[#3366FF] uppercase tracking-wider mb-1">
-              <span>Codec Workspace</span>
-              <span>•</span>
-              <span>Documentation Hub</span>
+               
+               
             </div>
             <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">
-              Documents & API Guides
+            SyncWrite
             </h1>
             <p className="text-slate-500 text-sm mt-1">
               Collaborative workspace for <strong className="text-slate-700">{user?.name}</strong>. Create, edit, and share live documentation.

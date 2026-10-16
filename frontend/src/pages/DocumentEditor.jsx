@@ -107,13 +107,6 @@ const DocumentEditor = () => {
     ).run();
   };
 
-  const insertParametersSection = () => {
-    if (!editor) return;
-    editor.chain().focus().insertContent(
-      `<hr /><h3>Parameters</h3><ul><li><code>amount</code> (integer, required) - The amount to charge.</li><li><code>currency</code> (string, required) - 3-letter ISO code (e.g., EUR, USD).</li><li><code>description</code> (string) - An arbitrary description.</li></ul>`
-    ).run();
-  };
-
   useEffect(() => {
     let editorInstance = null;
 
@@ -434,24 +427,8 @@ const DocumentEditor = () => {
           </div>
         </div>
 
-        {/* Right Side: Badges and Actions */}
+        {/* Right Side: Actions */}
         <div className="flex items-center space-x-2.5">
-          {/* Editors [count] badge */}
-          <div className="bg-white border border-slate-200 text-slate-600 px-2.5 py-1 rounded text-xs font-semibold flex items-center space-x-1.5 shadow-2xs">
-            <span>Editors</span>
-            <span className="bg-[#3366FF] text-white font-bold px-1.5 py-0.2 rounded text-[10px] leading-tight">
-              {activeUsersList.length || 1}
-            </span>
-          </div>
-
-          {/* Pages [count] badge */}
-          <div className="bg-white border border-slate-200 text-slate-600 px-2.5 py-1 rounded text-xs font-semibold flex items-center space-x-1.5 shadow-2xs">
-            <span>Pages</span>
-            <span className="bg-[#3366FF] text-white font-bold px-1.5 py-0.2 rounded text-[10px] leading-tight">
-              {pageEstimate}
-            </span>
-          </div>
-
           {/* Active Collaborators Avatars Circle stack */}
           <div className="hidden lg:block">
             <ActiveUsers users={activeUsersList} />
@@ -640,24 +617,6 @@ const DocumentEditor = () => {
             title="Insert Horizontal Divider"
           >
             —
-          </button>
-
-          <div className="h-4 w-[1px] bg-slate-200 mx-1" />
-
-          {/* Quick API Documentation Snippets */}
-          <button
-            onClick={insertEndpointCallout}
-            className="text-[11px] font-semibold text-slate-600 hover:text-[#3366FF] hover:bg-slate-100 px-2 py-1 rounded border border-slate-200 flex items-center space-x-1"
-            title="Insert API endpoint callout block"
-          >
-            <span>+ API Endpoint</span>
-          </button>
-          <button
-            onClick={insertParametersSection}
-            className="text-[11px] font-semibold text-slate-600 hover:text-[#3366FF] hover:bg-slate-100 px-2 py-1 rounded border border-slate-200 flex items-center space-x-1"
-            title="Insert parameters table"
-          >
-            <span>+ Parameters</span>
           </button>
 
           <div className="flex-1" />
