@@ -22,7 +22,7 @@ const Navbar = () => {
           <Link to="/dashboard" className="flex items-center space-x-2.5 group">
             {/* Pill Logo */}
             <div className="w-8 h-8 rounded-full bg-white flex items-center justify-center shadow-sm group-hover:scale-105 transition-transform">
-              <span className="text-[#3366FF] font-extrabold text-base leading-none">D</span>
+              <span className="text-[#3366FF] font-extrabold text-base leading-none">S</span>
             </div>
             <span className="text-white font-bold text-lg tracking-tight group-hover:opacity-95">
             SyncWrite

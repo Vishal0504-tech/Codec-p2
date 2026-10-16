@@ -53,9 +53,9 @@ const Register = () => {
         <div className="text-center">
           <div className="inline-flex items-center space-x-2.5 mb-4">
             <div className="w-10 h-10 rounded-full bg-[#3366FF] flex items-center justify-center shadow-md">
-              <span className="text-white font-extrabold text-xl leading-none">D</span>
+              <span className="text-white font-extrabold text-xl leading-none">S</span>
             </div>
-            <span className="text-slate-900 font-extrabold text-2xl tracking-tight">DocuRocket</span>
+            <span className="text-slate-900 font-extrabold text-2xl tracking-tight">SyncWrite</span>
           </div>
           <h2 className="text-2xl font-bold text-slate-800 tracking-tight">
             Create an account
